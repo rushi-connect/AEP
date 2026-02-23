@@ -1,0 +1,122 @@
+a folder read----------------
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import explode, col, input_file_name
+
+spark = SparkSession.builder \
+    .appName("ReadAllMeterXML") \
+    .config("spark.jars.packages", "com.databricks:spark-xml_2.12:0.16.0") \
+    .getOrCreate()
+
+s3_path = "s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2001/*.xml.gz"
+
+df = spark.read \
+    .format("xml") \
+    .option("rowTag", "MeterData") \
+    .load(s3_path)
+
+df_flattened = df.select(
+    col("_UtilServicePointID").alias("UtilServicePointID"),
+    col("_UtilDeviceID").alias("UtilDeviceID"),
+    col("_MacID").alias("MacID"),
+    col("_MeterName").alias("MeterName"),
+    col("IntervalReadData._IntervalLength").alias("IntervalLength"),
+    col("IntervalReadData._StartTime").alias("ReadStartTime"),
+    col("IntervalReadData._EndTime").alias("ReadEndTime"),
+    explode("IntervalReadData.Interval").alias("Interval")
+)
+
+df_final = df_flattened.select(
+    "UtilServicePointID",
+    "UtilDeviceID",
+    "MacID",
+    "MeterName",
+    "IntervalLength",
+    "ReadStartTime",
+    "ReadEndTime",
+    col("Interval._GatewayCollectedTime").alias("GatewayCollectedTime"),
+    col("Interval._IntervalSequenceNumber").alias("IntervalSequenceNumber"),
+    col("Interval._EndTime").alias("IntervalEndTime"),
+    explode("Interval.Reading").alias("Reading")
+).select(
+    "UtilServicePointID",
+    "UtilDeviceID",
+    "MacID",
+    "MeterName",
+    "IntervalLength",
+    "ReadStartTime",
+    "ReadEndTime",
+    "GatewayCollectedTime",
+    "IntervalSequenceNumber",
+    "IntervalEndTime",
+    col("Reading._UOM").alias("UOM"),
+    col("Reading._Channel").alias("Channel"),
+    col("Reading._Value").cast("double").alias("Value"),
+    col("Reading._RawValue").cast("double").alias("RawValue"),
+    col("Reading._BlockEndValue").cast("double").alias("BlockEndValue")
+).withColumn("SourceFile", input_file_name())
+
+df_final.show(20, truncate=False)
+print(f"Total readings: {df_final.count()}")
+
+
+----------------------------------------------------------------------------------------------------------------
+single file read--------------------
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import explode, col
+
+spark = SparkSession.builder \
+    .appName("ReadSingleMeterXML") \
+    .config("spark.jars.packages", "com.databricks:spark-xml_2.12:0.16.0") \
+    .getOrCreate()
+
+s3_path = "s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2001/20260219-9ab2f8bf-c82a-45ed-9548-7098f081703d-1-1.xml.gz"
+
+df = spark.read \
+    .format("xml") \
+    .option("rowTag", "MeterData") \
+    .load(s3_path)
+
+df_flattened = df.select(
+    col("_UtilServicePointID").alias("UtilServicePointID"),
+    col("_UtilDeviceID").alias("UtilDeviceID"),
+    col("_MacID").alias("MacID"),
+    col("_MeterName").alias("MeterName"),
+    col("IntervalReadData._IntervalLength").alias("IntervalLength"),
+    col("IntervalReadData._StartTime").alias("ReadStartTime"),
+    col("IntervalReadData._EndTime").alias("ReadEndTime"),
+    explode("IntervalReadData.Interval").alias("Interval")
+)
+
+df_final = df_flattened.select(
+    "UtilServicePointID",
+    "UtilDeviceID",
+    "MacID",
+    "MeterName",
+    "IntervalLength",
+    "ReadStartTime",
+    "ReadEndTime",
+    col("Interval._GatewayCollectedTime").alias("GatewayCollectedTime"),
+    col("Interval._IntervalSequenceNumber").alias("IntervalSequenceNumber"),
+    col("Interval._EndTime").alias("IntervalEndTime"),
+    explode("Interval.Reading").alias("Reading")
+).select(
+    "UtilServicePointID",
+    "UtilDeviceID",
+    "MacID",
+    "MeterName",
+    "IntervalLength",
+    "ReadStartTime",
+    "ReadEndTime",
+    "GatewayCollectedTime",
+    "IntervalSequenceNumber",
+    "IntervalEndTime",
+    col("Reading._UOM").alias("UOM"),
+    col("Reading._Channel").alias("Channel"),
+    col("Reading._Value").cast("double").alias("Value"),
+    col("Reading._RawValue").cast("double").alias("RawValue"),
+    col("Reading._BlockEndValue").cast("double").alias("BlockEndValue")
+)
+
+df_final.show(20, truncate=False)
