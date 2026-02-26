@@ -1,0 +1,1305 @@
+# ============================================================================
+# NONVEE UIQ INFO PIPELINE - COMPLETE PYSPARK IMPLEMENTATION
+# ============================================================================
+# OPCO: OH (Ohio)
+# 
+# PIPELINE FLOW:
+#   Step 1: Read XML files from S3 (Script 1 copies files, we read them)
+#   Step 2: SOURCE - Parse XML, Explode arrays, Join UOM mapping
+#   Step 3: STAGE - Join with meter_premise_macs_ami
+#   Step 4: STAGE VIEW - Add constants, calculate derived fields
+#   Step 5: TRANSFORM - Type casting
+#   Step 6: TRANSFORM VIEW - Deduplication
+#   Step 7: CONSUME - MERGE into final Iceberg table
+#
+# REFERENCE FILES:
+#   Shell Scripts:
+#     - source_interval_data_files.sh (Script 2)
+#     - stage_interval_xml_files.sh (Script 3)
+#     - xfrm_interval_data_files.sh (Script 4)
+#     - consume_interval_data_files.sh (Script 5)
+#   
+#   DDL Files:
+#     - stg_nonvee.interval_data_files_oh_src.ddl
+#     - stg_nonvee.interval_data_files_oh_src_vw.ddl
+#     - stg_nonvee.interval_data_files_oh_stg.ddl
+#     - stg_nonvee.interval_data_files_oh_stg_vw.ddl
+#     - stg_nonvee.interval_data_files_oh_xfrm.ddl
+#     - stg_nonvee.interval_data_files_oh_xfrm_vw.ddl
+#   
+#   DML Files:
+#     - usage_nonvee.reading_ivl_nonvee.dml
+#   
+#   PySpark Files:
+#     - stage_interval_xml_files.py
+#     - xfrm_interval_data_files.py
+#     - consume_interval_data_files.py
+#
+#   Reference Tables:
+#     - usage_nonvee.uom_mapping
+#     - stg_nonvee.meter_premise_macs_ami
+# ============================================================================
+
+# ============================================================================
+# CELL 1: SPARK CONFIGURATION
+# ============================================================================
+# Purpose: Configure spark-xml package for reading XML files
+# Reference: Original pipeline uses XmlSerDe in Hive, we use spark-xml
+# ============================================================================
+
+%%configure -f
+{
+    "conf": {
+        "spark.jars.packages": "com.databricks:spark-xml_2.12:0.18.0",
+        "spark.sql.catalog.iceberg_catalog": "org.apache.iceberg.spark.SparkCatalog",
+        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        "spark.sql.catalog.iceberg_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+        "spark.sql.catalog.iceberg_catalog.warehouse": "s3://aep-datalake-consume-dev/iceberg_catalog",
+        "spark.sql.session.timeZone": "America/New_York"
+    }
+}
+
+# ============================================================================
+# CELL 2: IMPORTS AND SPARK SESSION
+# ============================================================================
+
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.functions import (
+    col, lit, trim, lower, upper, when, coalesce, concat, concat_ws,
+    substring, unix_timestamp, from_unixtime, current_timestamp,
+    date_format, to_timestamp, input_file_name, explode, row_number
+)
+from pyspark.sql.types import (
+    StructType, StructField, StringType, LongType, DoubleType, 
+    TimestampType, ArrayType
+)
+from pyspark.sql.window import Window
+
+spark = SparkSession.builder.getOrCreate()
+
+print("Spark Session initialized successfully")
+print(f"Spark Version: {spark.version}")
+
+# ============================================================================
+# CELL 3: PIPELINE CONFIGURATION
+# ============================================================================
+# Purpose: Define all configurable parameters for the pipeline
+# ============================================================================
+
+# Operating Company Configuration
+OPCO = "oh"
+AWS_ENV = "dev"
+
+# OPCO Filter Conditions
+# Reference: stage_interval_xml_files.sh:126-139
+OPCO_FILTER_MAP = {
+    "oh": ["10", "07"],      # Ohio
+    "pso": ["95"],           # PSO
+    "im": ["04"],            # Indiana Michigan
+    "ap": ["01", "02", "06"], # Appalachian Power
+    "swp": ["96"]            # Southwestern
+}
+
+# Source XML Files Path
+# Reference: Script 1 (interval_data_source_files_check.sh) copies files here
+SOURCE_XML_PATHS = [
+    f"s3://aep-datalake-work-{AWS_ENV}/raw/intervals/nonvee/uiq_info/{OPCO}/*/*.xml.gz"
+]
+
+# Reference Table Paths
+METER_PREMISE_PATH = f"s3://aep-datalake-transform-{AWS_ENV}/util/uiq_cust/meter_premise_macs_ami/"
+UOM_MAPPING_TABLE = "usage_nonvee.uom_mapping"
+
+# Target Iceberg Table
+TARGET_TABLE = f"iceberg_catalog.usage_nonvee.reading_ivl_nonvee_{OPCO}"
+
+# Downstream Incremental Table
+DOWNSTREAM_TABLE = f"iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr"
+
+print(f"Pipeline Configuration:")
+print(f"  OPCO: {OPCO}")
+print(f"  AWS Environment: {AWS_ENV}")
+print(f"  Target Table: {TARGET_TABLE}")
+
+# ============================================================================
+# CELL 4: DEFINE XML SCHEMA
+# ============================================================================
+# Purpose: Define schema for parsing INFO XML files
+# Reference: stg_nonvee.interval_data_files_oh_src.ddl
+#
+# XML Structure:
+#   <MeterData MeterName="..." UtilDeviceID="..." MacID="...">
+#     <IntervalReadData StartTime="..." EndTime="..." IntervalLength="..." NumberIntervals="...">
+#       <Interval EndTime="..." GatewayCollectedTime="..." BlockSequenceNumber="..." IntervalSequenceNumber="...">
+#         <Reading Channel="..." RawValue="..." Value="..." UOM="..."/>
+#       </Interval>
+#     </IntervalReadData>
+#   </MeterData>
+# ============================================================================
+
+INFO_XML_SCHEMA = StructType([
+    # Meter-level attributes
+    # Reference: stg_nonvee.interval_data_files_oh_src.ddl:3-7
+    StructField("_MeterName", StringType(), True),
+    StructField("_UtilDeviceID", StringType(), True),
+    StructField("_MacID", StringType(), True),
+    
+    # IntervalReadData structure
+    # Reference: stg_nonvee.interval_data_files_oh_src.ddl:6-10
+    StructField("IntervalReadData", StructType([
+        StructField("_EndTime", StringType(), True),      # Block end time
+        StructField("_StartTime", StringType(), True),    # Block start time
+        StructField("_IntervalLength", LongType(), True), # Interval in minutes
+        StructField("_NumberIntervals", LongType(), True),
+        
+        # Interval array (middle level)
+        # Reference: stg_nonvee.interval_data_files_oh_src.ddl:10 (interval_reading array)
+        StructField("Interval", ArrayType(
+            StructType([
+                StructField("_EndTime", StringType(), True),
+                StructField("_GatewayCollectedTime", StringType(), True),
+                StructField("_BlockSequenceNumber", LongType(), True),
+                StructField("_IntervalSequenceNumber", LongType(), True),
+                
+                # Reading array (inner level - channel readings)
+                StructField("Reading", ArrayType(
+                    StructType([
+                        StructField("_Channel", LongType(), True),
+                        StructField("_RawValue", DoubleType(), True),
+                        StructField("_Value", DoubleType(), True),
+                        StructField("_UOM", StringType(), True)
+                    ]), True)
+                )
+            ]), True
+        ))
+    ]))
+])
+
+print("XML Schema defined successfully")
+
+# ============================================================================
+# CELL 5: READ XML FILES
+# ============================================================================
+# Purpose: Read raw XML.gz files using spark-xml
+# Reference: source_interval_data_files.sh
+# Reference: stg_nonvee.interval_data_files_oh_src.ddl (External table with XmlSerDe)
+#
+# Original Hive approach:
+#   - Uses XmlSerDe to parse XML
+#   - Creates external table pointing to XML files
+#   - Uses ALTER TABLE ADD PARTITION for new data
+#
+# PySpark approach:
+#   - Uses spark-xml to read XML directly
+#   - Captures INPUT__FILE__NAME for tracking
+# ============================================================================
+
+print("Reading XML files from S3...")
+
+paths_str = ",".join(SOURCE_XML_PATHS)
+
+df_raw = (
+    spark.read
+    .format("com.databricks.spark.xml")
+    .option("rowTag", "MeterData")
+    .option("rootTag", "MeterData")
+    .option("valueTag", "_text_content")
+    .schema(INFO_XML_SCHEMA)
+    .load(paths_str)
+    # Capture filename for tracking
+    # Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:52 (INPUT__FILE__NAME)
+    .withColumn("filename", input_file_name())
+)
+
+print(f"Raw XML records loaded: {df_raw.count()}")
+df_raw.printSchema()
+
+# ============================================================================
+# CELL 6: RENAME COLUMNS TO MATCH DDL NAMING
+# ============================================================================
+# Purpose: Rename XML attribute columns to match Hive table column names
+# Reference: stg_nonvee.interval_data_files_oh_src.ddl:3-7
+# ============================================================================
+
+df_raw = (
+    df_raw
+    .withColumnRenamed("_MeterName", "metername")
+    .withColumnRenamed("_UtilDeviceID", "utildeviceid")
+    .withColumnRenamed("_MacID", "macid")
+)
+
+print("Columns renamed to match DDL naming convention")
+
+# ============================================================================
+# CELL 7: CREATE UOM MAPPING DATAFRAME
+# ============================================================================
+# Purpose: UOM Mapping reference table for channel to UOM mapping
+# Reference: usage_nonvee.uom_mapping
+# Used in: stg_nonvee.interval_data_files_oh_src_vw.ddl:86-88
+#
+# Maps:
+#   - channel (aep_channel_id) → aep_derived_uom
+#   - channel → name_register
+#   - channel → aep_srvc_qlty_idntfr
+#   - channel → value_mltplr_flg (whether to multiply value by bill_cnst)
+# ============================================================================
+
+print("Loading UOM Mapping reference table...")
+
+try:
+    # Try to read from Glue catalog
+    df_uom_mapping = (
+        spark.table(UOM_MAPPING_TABLE)
+        .filter(col("aep_opco") == OPCO)
+        .select(
+            col("aep_opco"),
+            col("aep_channel_id"),
+            col("aep_derived_uom"),
+            col("aep_raw_uom"),
+            col("name_register"),
+            col("aep_srvc_qlty_idntfr"),
+            col("value_mltplr_flg")
+        )
+        .distinct()
+    )
+    print(f"UOM Mapping loaded from Glue: {df_uom_mapping.count()} records")
+except Exception as e:
+    print(f"Glue table not available, creating sample UOM mapping: {e}")
+    
+    # Sample UOM mapping data for OH
+    # Reference: usage_nonvee.uom_mapping table structure
+    uom_data = [
+        ("oh", "1", "KWH", "kwh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "2", "KW", "kw", "kW_del_mtr_ivl_len_min", "DEMAND", "N"),
+        ("oh", "3", "KVARH", "kvarh", "kVArh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "4", "KVAR", "kvar", "kVAr_del_mtr_ivl_len_min", "DEMAND", "N"),
+        ("oh", "5", "KVAH", "kvah", "kVAh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "100", "KWH", "wh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "Y"),
+        ("oh", "101", "KWH", "kwh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "102", "KWH", "kwh(rec)", "kWh_rec_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "108", "KVARH", "kvarh", "kVArh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+        ("oh", "109", "KVAH", "kvah", "kVAh_del_mtr_ivl_len_min", "INTERVAL", "N"),
+    ]
+    
+    uom_schema = StructType([
+        StructField("aep_opco", StringType()),
+        StructField("aep_channel_id", StringType()),
+        StructField("aep_derived_uom", StringType()),
+        StructField("aep_raw_uom", StringType()),
+        StructField("name_register", StringType()),
+        StructField("aep_srvc_qlty_idntfr", StringType()),
+        StructField("value_mltplr_flg", StringType())
+    ])
+    
+    df_uom_mapping = spark.createDataFrame(uom_data, uom_schema)
+    print(f"Sample UOM Mapping created: {df_uom_mapping.count()} records")
+
+df_uom_mapping.show(truncate=False)
+
+# ============================================================================
+# CELL 8: FIRST EXPLODE - INTERVAL ARRAY
+# ============================================================================
+# Purpose: Flatten the Interval array (middle level) - one row per interval
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:68
+# 
+# Original Hive:
+#   LATERAL VIEW explode(a.Interval_reading) exp_interval as exp_interval
+#
+# This explodes the array of intervals within IntervalReadData
+# Each interval has its own EndTime, GatewayCollectedTime, and Reading array
+# ============================================================================
+
+print("Step 2a: First EXPLODE - Interval Array")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:68")
+
+df_interval_exploded = (
+    df_raw
+    .select(
+        col("filename"),
+        trim(col("metername")).alias("metername"),
+        col("utildeviceid"),
+        col("macid"),
+        col("IntervalReadData._IntervalLength").alias("intervallength"),
+        col("IntervalReadData._StartTime").alias("blockstarttime"),
+        col("IntervalReadData._EndTime").alias("blockendtime"),
+        col("IntervalReadData._NumberIntervals").alias("numberintervals"),
+        col("IntervalReadData.Interval").alias("interval_arr")
+    )
+    # LATERAL VIEW EXPLODE - First level (Interval array)
+    .withColumn("interval_exploded", explode(col("interval_arr")))
+    .select(
+        col("filename"),
+        col("metername"),
+        col("utildeviceid"),
+        col("macid"),
+        col("intervallength"),
+        col("blockstarttime"),
+        col("blockendtime"),
+        col("numberintervals"),
+        col("interval_exploded._EndTime").alias("int_endtime"),
+        col("interval_exploded._GatewayCollectedTime").alias("int_gatewaycollectedtime"),
+        col("interval_exploded._BlockSequenceNumber").alias("int_blocksequencenumber"),
+        col("interval_exploded._IntervalSequenceNumber").alias("int_intervalsequencenumber"),
+        col("interval_exploded.Reading").alias("reading_arr")
+    )
+)
+
+print(f"After first EXPLODE: {df_interval_exploded.count()} records")
+
+# ============================================================================
+# CELL 9: SECOND EXPLODE - READING ARRAY
+# ============================================================================
+# Purpose: Flatten the Reading array (inner level) - one row per channel reading
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:73
+#
+# Original Hive:
+#   LATERAL VIEW explode(t.int_reading) exp_reading as exp_reading
+#
+# This explodes the array of channel readings within each Interval
+# Each reading has Channel, RawValue, Value, and UOM
+# ============================================================================
+
+print("Step 2b: Second EXPLODE - Reading Array")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:73")
+
+df_reading_exploded = (
+    df_interval_exploded
+    # LATERAL VIEW EXPLODE - Second level (Reading/Channel array)
+    .withColumn("reading_exploded", explode(col("reading_arr")))
+    .select(
+        col("filename"),
+        col("metername"),
+        col("utildeviceid"),
+        col("macid"),
+        col("intervallength"),
+        col("blockstarttime"),
+        col("blockendtime"),
+        col("numberintervals"),
+        col("int_endtime"),
+        col("int_gatewaycollectedtime"),
+        col("int_blocksequencenumber"),
+        col("int_intervalsequencenumber"),
+        col("reading_exploded._Channel").alias("channel"),
+        col("reading_exploded._RawValue").alias("rawvalue"),
+        col("reading_exploded._Value").alias("value"),
+        col("reading_exploded._UOM").alias("uom")
+    )
+)
+
+print(f"After second EXPLODE: {df_reading_exploded.count()} records")
+
+# ============================================================================
+# CELL 10: APPLY NOT NULL FILTER
+# ============================================================================
+# Purpose: Drop garbage/incomplete records
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:76-81
+#
+# Original Hive:
+#   WHERE (
+#     exp_reading.exp_reading.channel is not NULL
+#     and exp_reading.exp_reading.rawvalue is not NULL
+#     and exp_reading.exp_reading.value is not NULL
+#     and exp_reading.exp_reading.uom is not NULL
+#   )
+#
+# This removes records with garbage tags like <IntervalStatus>INTERVAL_GMI_CRC_FLASH_ERROR</IntervalStatus>
+# ============================================================================
+
+print("Step 2c: Apply NOT NULL Filter")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:76-81")
+
+df_filtered = (
+    df_reading_exploded
+    .filter(
+        col("channel").isNotNull() &
+        col("rawvalue").isNotNull() &
+        col("value").isNotNull() &
+        col("uom").isNotNull()
+    )
+)
+
+print(f"After NOT NULL filter: {df_filtered.count()} records")
+
+# ============================================================================
+# CELL 11: CALCULATE STARTTIME, ENDTIME, INTERVAL_EPOCH
+# ============================================================================
+# Purpose: Calculate derived time fields
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:39-41
+#
+# Transformations:
+#   - starttime = endtime - (IntervalLength * 60 seconds)
+#     Reference: Line 39 - from_unixtime(unix_timestamp(...) - (IntervalLength*60))
+#   
+#   - endtime = formatted endtime
+#     Reference: Line 40 - from_unixtime(unix_timestamp(...))
+#   
+#   - interval_epoch = timezone offset from timestamp (last 6 chars like -05:00)
+#     Reference: Line 41 - SUBSTR(t.int_endtime,-6,6)
+# ============================================================================
+
+print("Step 2d: Calculate Time Fields")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:39-41")
+
+df_with_times = (
+    df_filtered
+    # Extract timezone offset from int_endtime string
+    # Format: "2026-02-19T15:30:00-05:00" -> "-05:00"
+    .withColumn(
+        "interval_epoch",
+        substring(col("int_endtime"), -6, 6)
+    )
+    
+    # Clean endtime to 19 chars for timestamp parsing
+    # "2026-02-19T15:30:00-05:00" -> "2026-02-19T15:30:00"
+    .withColumn(
+        "int_endtime_clean",
+        substring(col("int_endtime"), 1, 19)
+    )
+    
+    # Calculate starttime = endtime - (IntervalLength * 60 seconds)
+    .withColumn(
+        "starttime",
+        from_unixtime(
+            unix_timestamp(col("int_endtime_clean"), "yyyy-MM-dd'T'HH:mm:ss")
+            - (col("intervallength").cast("int") * 60),
+            "yyyy-MM-dd'T'HH:mm:ss"
+        )
+    )
+    
+    # Format endtime
+    .withColumn(
+        "endtime",
+        from_unixtime(
+            unix_timestamp(col("int_endtime_clean"), "yyyy-MM-dd'T'HH:mm:ss"),
+            "yyyy-MM-dd'T'HH:mm:ss"
+        )
+    )
+    .drop("int_endtime_clean")
+)
+
+print("Time fields calculated successfully")
+df_with_times.select("metername", "intervallength", "starttime", "endtime", "interval_epoch").show(5, truncate=False)
+
+# ============================================================================
+# CELL 12: JOIN WITH UOM MAPPING
+# ============================================================================
+# Purpose: Get derived UOM, register name, service quality identifier
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:86-88
+#
+# Original Hive:
+#   left join
+#   (select distinct aep_opco,aep_channel_id,aep_derived_uom,name_register,aep_srvc_qlty_idntfr,aep_raw_uom,value_mltplr_flg
+#   from usage_nonvee.uom_mapping where aep_opco ='oh' ) um
+#   on reading.channel = um.aep_channel_id;
+#
+# Also applies:
+#   - nvl(um.aep_derived_uom,'UNK') as aep_uom (Line 25)
+#   - translate(um.name_register,'mtr_ivl_len',reading.IntervalLength) (Line 26)
+#   - nvl(um.aep_srvc_qlty_idntfr,'UNK') (Line 27)
+# ============================================================================
+
+print("Step 2e: Join with UOM Mapping")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:86-88")
+
+df_with_uom = (
+    df_with_times.alias("r")
+    .join(
+        df_uom_mapping.alias("u"),
+        col("r.channel").cast("string") == col("u.aep_channel_id"),
+        "left"
+    )
+    .select(
+        col("r.filename"),
+        col("r.metername"),
+        col("r.utildeviceid"),
+        col("r.macid"),
+        col("r.intervallength"),
+        col("r.blockstarttime"),
+        col("r.blockendtime"),
+        col("r.numberintervals"),
+        col("r.starttime"),
+        col("r.endtime"),
+        col("r.interval_epoch"),
+        col("r.int_gatewaycollectedtime"),
+        col("r.int_blocksequencenumber"),
+        col("r.int_intervalsequencenumber"),
+        col("r.channel"),
+        col("r.rawvalue"),
+        col("r.value"),
+        # lower(trim(uom)) - Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:23
+        lower(trim(col("r.uom"))).alias("uom"),
+        # nvl(um.aep_derived_uom,'UNK') - Reference: Line 25
+        coalesce(col("u.aep_derived_uom"), lit("UNK")).alias("aep_uom"),
+        # translate(um.name_register,'mtr_ivl_len',reading.IntervalLength) - Reference: Line 26
+        when(
+            col("u.name_register").isNotNull(),
+            F.regexp_replace(col("u.name_register"), "mtr_ivl_len", col("r.intervallength").cast("string"))
+        ).otherwise(lit("UNK")).alias("name_register"),
+        # nvl(um.aep_srvc_qlty_idntfr,'UNK') - Reference: Line 27
+        coalesce(col("u.aep_srvc_qlty_idntfr"), lit("UNK")).alias("aep_sqi"),
+        col("u.value_mltplr_flg")
+    )
+)
+
+print(f"After UOM mapping join: {df_with_uom.count()} records")
+
+# ============================================================================
+# CELL 13: APPLY DATE FILTER
+# ============================================================================
+# Purpose: Filter records with starttime >= 2015-03-01
+# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:70
+#
+# Original Hive:
+#   where from_unixtime(unix_timestamp(substr(a.StartTime,0,10),"yyyy-MM-dd"),'yyyyMMdd') >=20150301
+# ============================================================================
+
+print("Step 2f: Apply Date Filter (>= 2015-03-01)")
+print("Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl:70")
+
+df_source_view = (
+    df_with_uom
+    .filter(
+        date_format(
+            F.to_date(substring(col("starttime"), 1, 10), "yyyy-MM-dd"),
+            "yyyyMMdd"
+        ).cast("int") >= 20150301
+    )
+)
+
+print(f"After date filter: {df_source_view.count()} records")
+print("\n=== SOURCE VIEW (Script 2) COMPLETE ===")
+print("Equivalent to: stg_nonvee.interval_data_files_oh_src_vw")
+
+# ============================================================================
+# CELL 14: READ METER_PREMISE_MACS_AMI REFERENCE TABLE
+# ============================================================================
+# Purpose: Load meter-premise mapping master data
+# Reference: stage_interval_xml_files.sh:239-268
+# Reference: stg_nonvee.meter_premise_macs_ami table
+#
+# This table provides:
+#   - Premise number (prem_nb)
+#   - Billing constant (bill_cnst)
+#   - Account class/type codes
+#   - Device code and meter program
+#   - Service delivery ID
+#   - Meter/Tariff point numbers
+#   - Meter install/removal timestamps
+#   - Location (city, zip, state)
+# ============================================================================
+
+print("\n=== STEP 3: STAGE - Join with meter_premise_macs_ami ===")
+print("Reference: stage_interval_xml_files.sh:239-268")
+
+print(f"Loading meter_premise_macs_ami from: {METER_PREMISE_PATH}")
+
+df_meter_premise = spark.read.parquet(METER_PREMISE_PATH)
+
+# Filter by OPCO and prepare MACS data
+# Reference: stage_interval_xml_files.sh:268 - WHERE (${FILTER_COND})
+macs_df = (
+    df_meter_premise
+    .filter(col("co_cd_ownr").isin(OPCO_FILTER_MAP[OPCO]))
+    .select(
+        col("prem_nb"),
+        col("bill_cnst"),
+        col("acct_clas_cd"),
+        col("acct_type_cd"),
+        col("devc_cd"),
+        col("pgm_id_nm"),
+        # Reference: stage_interval_xml_files.sh:247
+        # concat(nvl(tx_mand_data,''),nvl(doe_nb,''),nvl(serv_deliv_id,'')) sd
+        concat(
+            coalesce(col("tx_mand_data"), lit("")),
+            coalesce(col("doe_nb"), lit("")),
+            coalesce(col("serv_deliv_id"), lit(""))
+        ).alias("sd"),
+        col("mfr_devc_ser_nbr"),
+        col("mtr_inst_ts"),
+        col("mtr_rmvl_ts"),
+        col("acct_turn_on_dt"),
+        col("acct_turn_off_dt"),
+        col("bill_acct_nb"),
+        col("mtr_pnt_nb"),
+        col("tarf_pnt_nb"),
+        # Reference: stage_interval_xml_files.sh:256 - null as cmsg_mtr_mult_nb
+        lit(None).cast("string").alias("cmsg_mtr_mult_nb"),
+        # Reference: stage_interval_xml_files.sh:257-263 - Unix timestamps for join
+        unix_timestamp(col("mtr_inst_ts"), "yyyy-MM-dd HH:mm:ss").alias("unix_mtr_inst_ts"),
+        when(
+            col("mtr_rmvl_ts") == "9999-01-01",
+            unix_timestamp(col("mtr_rmvl_ts"), "yyyy-MM-dd")
+        ).otherwise(
+            unix_timestamp(col("mtr_rmvl_ts"), "yyyy-MM-dd HH:mm:ss")
+        ).alias("unix_mtr_rmvl_ts"),
+        unix_timestamp(col("acct_turn_on_dt"), "yyyy-MM-dd").alias("unix_acct_turn_on_dt"),
+        unix_timestamp(col("acct_turn_off_dt"), "yyyy-MM-dd").alias("unix_acct_turn_off_dt"),
+        # Reference: stage_interval_xml_files.sh:264-266
+        col("serv_city_ad").alias("aep_city"),
+        col("serv_zip_ad").alias("aep_zip"),
+        col("state_cd").alias("aep_state")
+    )
+)
+
+print(f"MACS reference data loaded: {macs_df.count()} records for OPCO {OPCO}")
+
+# ============================================================================
+# CELL 15: JOIN SOURCE VIEW WITH MACS
+# ============================================================================
+# Purpose: LEFT JOIN with time window validation
+# Reference: stage_interval_xml_files.sh:270-272
+#
+# Original Hive JOIN condition:
+#   ON (( a.metername = macs.mfr_devc_ser_nbr )
+#   AND ( unix_timestamp(a.endtime, "yyyy-MM-dd'T'HH:mm:ssXXX") 
+#         between macs.unix_mtr_inst_ts and macs.unix_mtr_rmvl_ts )
+#   AND ( unix_timestamp(a.endtime, "yyyy-MM-dd'T'HH:mm:ssXXX") 
+#         between macs.unix_acct_turn_on_dt and macs.unix_acct_turn_off_dt ))
+#
+# This ensures meter readings are matched to the correct premise assignment
+# based on meter installation period AND account active period
+# ============================================================================
+
+print("Step 3a: Join Source View with MACS (LEFT JOIN with time windows)")
+print("Reference: stage_interval_xml_files.sh:270-272")
+
+# Add unix timestamp to source view for join
+src_with_unix = df_source_view.withColumn(
+    "unix_endtime",
+    unix_timestamp(
+        concat(col("endtime"), col("interval_epoch")),
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+    )
+)
+
+# LEFT JOIN with time window validation
+stage_df = (
+    src_with_unix.alias("a")
+    .join(
+        macs_df.alias("macs"),
+        (col("a.metername") == col("macs.mfr_devc_ser_nbr")) &
+        (col("a.unix_endtime").between(col("macs.unix_mtr_inst_ts"), col("macs.unix_mtr_rmvl_ts"))) &
+        (col("a.unix_endtime").between(col("macs.unix_acct_turn_on_dt"), col("macs.unix_acct_turn_off_dt"))),
+        "left"
+    )
+    .select(
+        # Source columns - Reference: stage_interval_xml_files.sh:195-237
+        col("a.filename"),
+        lit(OPCO).alias("aep_opco"),
+        col("a.metername").alias("serialnumber"),
+        col("a.utildeviceid"),
+        col("a.macid"),
+        col("a.intervallength"),
+        col("a.blockstarttime"),
+        col("a.blockendtime"),
+        col("a.numberintervals"),
+        col("a.starttime"),
+        col("a.endtime"),
+        col("a.interval_epoch"),
+        col("a.int_gatewaycollectedtime"),
+        col("a.int_blocksequencenumber"),
+        col("a.int_intervalsequencenumber"),
+        col("a.channel"),
+        # Reference: stage_interval_xml_files.sh:213 - a.value as aep_raw_value
+        col("a.value").alias("aep_raw_value"),
+        col("a.value"),
+        # Reference: stage_interval_xml_files.sh:215 - a.uom as aep_raw_uom
+        col("a.uom").alias("aep_raw_uom"),
+        # Reference: stage_interval_xml_files.sh:216 - upper(a.aep_uom) as aep_derived_uom
+        upper(col("a.aep_uom")).alias("aep_derived_uom"),
+        col("a.name_register"),
+        # Reference: stage_interval_xml_files.sh:218 - a.aep_sqi as aep_srvc_qlty_idntfr
+        col("a.aep_sqi").alias("aep_srvc_qlty_idntfr"),
+        # MACS columns - Reference: stage_interval_xml_files.sh:219-237
+        col("macs.prem_nb").alias("aep_premise_nb"),
+        col("macs.bill_cnst"),
+        col("macs.acct_clas_cd").alias("aep_acct_cls_cd"),
+        col("macs.acct_type_cd").alias("aep_acct_type_cd"),
+        col("macs.devc_cd").alias("aep_devicecode"),
+        col("macs.pgm_id_nm").alias("aep_meter_program"),
+        col("macs.sd").alias("aep_srvc_dlvry_id"),
+        col("macs.mtr_pnt_nb").alias("aep_mtr_pnt_nb"),
+        col("macs.tarf_pnt_nb").alias("aep_tarf_pnt_nb"),
+        col("macs.cmsg_mtr_mult_nb").alias("aep_comp_mtr_mltplr"),
+        col("macs.mtr_rmvl_ts").alias("aep_mtr_removal_ts"),
+        col("macs.mtr_inst_ts").alias("aep_mtr_install_ts"),
+        col("macs.aep_city"),
+        # Reference: stage_interval_xml_files.sh:232 - substr(macs.aep_zip,1,5)
+        substring(col("macs.aep_zip"), 1, 5).alias("aep_zip"),
+        col("macs.aep_state"),
+        # Reference: stage_interval_xml_files.sh:234
+        lit("pyspark-info").alias("hdp_update_user"),
+        col("a.value_mltplr_flg"),
+        # Reference: stage_interval_xml_files.sh:237 - substr(trim(a.metername),-2)
+        substring(trim(col("a.metername")), -2, 2).alias("aep_meter_bucket")
+    )
+)
+
+print(f"After MACS join: {stage_df.count()} records")
+print("=== STAGE TABLE (Script 3 Part 1) COMPLETE ===")
+print("Equivalent to: stg_nonvee.interval_data_files_oh_stg")
+
+# ============================================================================
+# CELL 16: STAGE VIEW - ADD CONSTANTS AND DERIVED FIELDS
+# ============================================================================
+# Purpose: Add constants, calculate service point, apply value multiplier
+# Reference: stg_nonvee.interval_data_files_oh_stg_vw.ddl
+#
+# Key Transformations:
+#   - source = "nonvee-hes" (Line 4)
+#   - isvirtual_meter = "N" (Line 6)
+#   - aep_service_point = concat(premise, tarf_pnt, mtr_pnt) (Lines 10-13)
+#   - aep_sec_per_intrvl = intervallength * 60 (Line 22)
+#   - value = value * bill_cnst when value_mltplr_flg='Y' (Lines 29-32)
+#   - aep_endtime_utc = unix_timestamp(...) (Line 40)
+#   - authority = substr(premise_nb, 1, 2) (Line 49)
+#   - aep_usage_dt = substr(starttime, 0, 10) (Line 50)
+# ============================================================================
+
+print("\n=== STEP 4: STAGE VIEW - Derived Fields ===")
+print("Reference: stg_nonvee.interval_data_files_oh_stg_vw.ddl")
+
+stage_view_df = stage_df.select(
+    col("serialnumber"),
+    # Reference: Line 4 - "nonvee-hes" as source
+    lit("nonvee-hes").alias("source"),
+    col("aep_devicecode"),
+    # Reference: Line 6 - "N" as isvirtual_meter
+    lit("N").alias("isvirtual_meter"),
+    # Reference: Line 7 - interval_epoch as timezoneoffset
+    col("interval_epoch").alias("timezoneoffset"),
+    col("aep_premise_nb"),
+    
+    # Reference: Lines 10-13 - Service point calculation
+    # if (premise_nb is not NULL and tarf_pnt_nb is not NULL and mtr_pnt_nb is not NULL)
+    #   concat(premise_nb, '-', tarf_pnt_nb, '-', mtr_pnt_nb)
+    # else NULL
+    when(
+        (col("aep_premise_nb").isNotNull()) &
+        (col("aep_tarf_pnt_nb").isNotNull()) &
+        (col("aep_mtr_pnt_nb").isNotNull()),
+        concat_ws("-", col("aep_premise_nb"), col("aep_tarf_pnt_nb"), col("aep_mtr_pnt_nb"))
+    ).otherwise(lit(None)).alias("aep_service_point"),
+    
+    col("aep_mtr_install_ts"),
+    col("aep_mtr_removal_ts"),
+    col("aep_srvc_dlvry_id"),
+    # Reference: Line 39 - cast(aep_comp_mtr_mltplr as double)
+    col("aep_comp_mtr_mltplr").cast("double"),
+    col("name_register"),
+    # Reference: Line 17 - "N" as isvirtual_register
+    lit("N").alias("isvirtual_register"),
+    # Reference: xfrm_interval_data_files.sh:155-156 - null columns
+    lit(None).cast("string").alias("toutier"),
+    lit(None).cast("string").alias("toutiername"),
+    col("aep_derived_uom"),
+    col("aep_raw_uom"),
+    col("aep_srvc_qlty_idntfr"),
+    col("channel").alias("aep_channel_id"),
+    # Reference: Line 22 - (intervallength * 60) as aep_sec_per_intrvl
+    (col("intervallength").cast("int") * 60).alias("aep_sec_per_intrvl"),
+    # Reference: Line 23 - NULL as aep_meter_alias
+    lit(None).cast("string").alias("aep_meter_alias"),
+    col("aep_meter_program"),
+    # Reference: xfrm_interval_data_files.sh:163 - null as aep_billable_ind
+    lit(None).cast("string").alias("aep_billable_ind"),
+    # Reference: Line 25 - "interval" as aep_usage_type
+    lit("interval").alias("aep_usage_type"),
+    # Reference: Line 26 - "US/Eastern" as aep_timezone_cd
+    lit("US/Eastern").alias("aep_timezone_cd"),
+    # Reference: Line 27 - endtime as endtimeperiod
+    col("endtime").alias("endtimeperiod"),
+    # Reference: Line 28 - starttime as starttimeperiod
+    col("starttime").alias("starttimeperiod"),
+    
+    # Reference: Lines 29-32 - Value multiplication
+    # CASE WHEN value_mltplr_flg='Y' THEN value * bill_cnst ELSE value END
+    when(
+        col("value_mltplr_flg") == "Y",
+        col("value") * col("bill_cnst")
+    ).otherwise(col("value")).alias("value"),
+    
+    col("aep_raw_value"),
+    # Reference: Line 34 - bill_cnst as scalarfloat
+    col("bill_cnst").alias("scalarfloat"),
+    # Reference: xfrm_interval_data_files.sh:171-172 - null columns
+    lit(None).cast("string").alias("aep_data_quality_cd"),
+    lit(None).cast("string").alias("aep_data_validation"),
+    col("aep_acct_cls_cd"),
+    col("aep_acct_type_cd"),
+    col("aep_mtr_pnt_nb"),
+    col("aep_tarf_pnt_nb"),
+    
+    # Reference: Line 40 - UTC timestamp calculation
+    # unix_timestamp(concat(endtime, interval_epoch), "yyyy-MM-dd'T'HH:mm:ssXXX")
+    unix_timestamp(
+        concat(col("endtime"), col("interval_epoch")),
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+    ).cast("string").alias("aep_endtime_utc"),
+    
+    col("aep_city"),
+    col("aep_zip"),
+    col("aep_state"),
+    # Reference: Lines 46-47 - Audit timestamps
+    current_timestamp().alias("hdp_insert_dttm"),
+    current_timestamp().alias("hdp_update_dttm"),
+    col("hdp_update_user"),
+    # Reference: Line 49 - substr(aep_premise_nb,1,2) as authority
+    substring(col("aep_premise_nb"), 1, 2).alias("authority"),
+    # Reference: Line 50 - substr(starttime,0,10) as aep_usage_dt
+    substring(col("starttime"), 1, 10).alias("aep_usage_dt"),
+    # Reference: Line 51 - "new" as data_type
+    lit("new").alias("data_type"),
+    col("aep_opco"),
+    col("aep_meter_bucket")
+)
+
+print(f"After stage view transformations: {stage_view_df.count()} records")
+print("=== STAGE VIEW (Script 3 Part 2) COMPLETE ===")
+print("Equivalent to: default.iceberg_interval_data_files_oh_stg_vw")
+
+# ============================================================================
+# CELL 17: TRANSFORM - TYPE CASTING
+# ============================================================================
+# Purpose: Cast columns to match target Iceberg table schema
+# Reference: stg_nonvee.interval_data_files_oh_xfrm.ddl
+# Reference: xfrm_interval_data_files.sh:140-191
+#
+# Key type conversions:
+#   - value: float
+#   - aep_raw_value: float
+#   - scalarfloat: float
+#   - aep_comp_mtr_mltplr: double
+#   - aep_sec_per_intrvl: double
+#   - hdp_insert_dttm: timestamp
+#   - hdp_update_dttm: timestamp
+# ============================================================================
+
+print("\n=== STEP 5: TRANSFORM - Type Casting ===")
+print("Reference: stg_nonvee.interval_data_files_oh_xfrm.ddl")
+print("Reference: xfrm_interval_data_files.sh:140-191")
+
+transform_df = stage_view_df.select(
+    col("serialnumber").cast("string"),
+    col("source").cast("string"),
+    col("aep_devicecode").cast("string"),
+    col("isvirtual_meter").cast("string"),
+    col("timezoneoffset").cast("string"),
+    col("aep_premise_nb").cast("string"),
+    col("aep_service_point").cast("string"),
+    col("aep_mtr_install_ts").cast("string"),
+    col("aep_mtr_removal_ts").cast("string"),
+    col("aep_srvc_dlvry_id").cast("string"),
+    # Reference: stg_nonvee.interval_data_files_oh_xfrm.ddl:13 - double
+    col("aep_comp_mtr_mltplr").cast("double"),
+    col("name_register").cast("string"),
+    col("isvirtual_register").cast("string"),
+    col("toutier").cast("string"),
+    col("toutiername").cast("string"),
+    col("aep_srvc_qlty_idntfr").cast("string"),
+    col("aep_channel_id").cast("string"),
+    col("aep_raw_uom").cast("string"),
+    # Reference: stg_nonvee.interval_data_files_oh_xfrm.ddl:21 - double
+    col("aep_sec_per_intrvl").cast("double"),
+    col("aep_meter_alias").cast("string"),
+    col("aep_meter_program").cast("string"),
+    col("aep_billable_ind").cast("string"),
+    col("aep_usage_type").cast("string"),
+    col("aep_timezone_cd").cast("string"),
+    col("endtimeperiod").cast("string"),
+    col("starttimeperiod").cast("string"),
+    # Reference: xfrm_interval_data_files.sh:168 - cast(value as float)
+    col("value").cast("float"),
+    # Reference: xfrm_interval_data_files.sh:169 - cast(aep_raw_value as float)
+    col("aep_raw_value").cast("float"),
+    # Reference: xfrm_interval_data_files.sh:170 - cast(scalarfloat as float)
+    col("scalarfloat").cast("float"),
+    col("aep_data_quality_cd").cast("string"),
+    col("aep_data_validation").cast("string"),
+    col("aep_acct_cls_cd").cast("string"),
+    col("aep_acct_type_cd").cast("string"),
+    col("aep_mtr_pnt_nb").cast("string"),
+    col("aep_tarf_pnt_nb").cast("string"),
+    col("aep_endtime_utc").cast("string"),
+    col("aep_city").cast("string"),
+    col("aep_zip").cast("string"),
+    col("aep_state").cast("string"),
+    col("hdp_update_user").cast("string"),
+    # Reference: xfrm_interval_data_files.sh:182-183 - cast as timestamp
+    col("hdp_insert_dttm").cast("timestamp"),
+    col("hdp_update_dttm").cast("timestamp"),
+    col("authority").cast("string"),
+    col("aep_derived_uom").cast("string"),
+    col("data_type").cast("string"),
+    col("aep_opco").cast("string"),
+    col("aep_usage_dt").cast("string"),
+    col("aep_meter_bucket").cast("string")
+)
+
+print(f"After type casting: {transform_df.count()} records")
+print("=== TRANSFORM (Script 4 Part 1) COMPLETE ===")
+print("Equivalent to: iceberg_catalog.stg_nonvee.interval_data_files_oh_xfrm")
+
+# ============================================================================
+# CELL 18: TRANSFORM VIEW - DEDUPLICATION
+# ============================================================================
+# Purpose: Remove duplicate records, keeping the latest by hdp_insert_dttm
+# Reference: stg_nonvee.interval_data_files_oh_xfrm_vw.ddl:2-5
+#
+# Original Hive:
+#   SELECT * FROM (
+#     SELECT a.*, 
+#       ROW_NUMBER() OVER (
+#         PARTITION BY serialnumber, endtimeperiod, aep_channel_id, aep_raw_uom 
+#         ORDER BY hdp_insert_dttm DESC
+#       ) AS row_num
+#     FROM iceberg_catalog.stg_nonvee.interval_data_files_oh_xfrm a
+#   ) b
+#   WHERE b.row_num = 1;
+#
+# This ensures only the latest record per unique key is kept
+# ============================================================================
+
+print("\n=== STEP 6: TRANSFORM VIEW - Deduplication ===")
+print("Reference: stg_nonvee.interval_data_files_oh_xfrm_vw.ddl:2-5")
+
+# Define deduplication window
+# Reference: stg_nonvee.interval_data_files_oh_xfrm_vw.ddl:3
+dedup_window = Window.partitionBy(
+    "serialnumber",
+    "endtimeperiod",
+    "aep_channel_id",
+    "aep_raw_uom"
+).orderBy(col("hdp_insert_dttm").desc())
+
+# Apply ROW_NUMBER and filter for row_num = 1
+transform_view_df = (
+    transform_df
+    .withColumn("row_num", row_number().over(dedup_window))
+    .filter(col("row_num") == 1)
+    .drop("row_num")
+)
+
+print(f"Before deduplication: {transform_df.count()} records")
+print(f"After deduplication: {transform_view_df.count()} records")
+print(f"Duplicates removed: {transform_df.count() - transform_view_df.count()}")
+print("=== TRANSFORM VIEW (Script 4 Part 2) COMPLETE ===")
+print("Equivalent to: default.interval_data_files_oh_xfrm_vw")
+
+# ============================================================================
+# CELL 19: PREPARE CONSUMPTION DATAFRAME
+# ============================================================================
+# Purpose: Prepare final DataFrame for MERGE into target table
+# Reference: usage_nonvee.reading_ivl_nonvee.dml (SELECT portion)
+#
+# Column ordering matches the target table schema
+# ============================================================================
+
+print("\n=== STEP 7: Prepare Consumption DataFrame ===")
+print("Reference: usage_nonvee.reading_ivl_nonvee.dml")
+
+consumption_df = transform_view_df.select(
+    col("serialnumber"),
+    col("source"),
+    col("aep_devicecode"),
+    col("isvirtual_meter"),
+    col("timezoneoffset"),
+    col("aep_premise_nb"),
+    col("aep_service_point"),
+    col("aep_srvc_dlvry_id"),
+    col("name_register"),
+    col("isvirtual_register"),
+    col("toutier"),
+    col("toutiername"),
+    col("aep_derived_uom"),
+    col("aep_raw_uom"),
+    col("aep_srvc_qlty_idntfr"),
+    col("aep_channel_id"),
+    col("aep_sec_per_intrvl"),
+    col("aep_meter_alias"),
+    col("aep_meter_program"),
+    col("aep_billable_ind"),
+    col("aep_usage_type"),
+    col("aep_timezone_cd"),
+    col("endtimeperiod"),
+    col("starttimeperiod"),
+    col("value"),
+    col("aep_raw_value"),
+    col("scalarfloat"),
+    col("aep_data_quality_cd"),
+    col("aep_data_validation"),
+    col("aep_acct_cls_cd"),
+    col("aep_acct_type_cd"),
+    col("aep_mtr_pnt_nb"),
+    col("aep_tarf_pnt_nb"),
+    col("aep_comp_mtr_mltplr"),
+    col("aep_endtime_utc"),
+    col("aep_mtr_removal_ts"),
+    col("aep_mtr_install_ts"),
+    col("aep_city"),
+    col("aep_zip"),
+    col("aep_state"),
+    col("hdp_insert_dttm"),
+    col("hdp_update_dttm"),
+    col("hdp_update_user"),
+    col("authority"),
+    col("aep_opco"),
+    col("aep_usage_dt"),
+    col("aep_meter_bucket")
+)
+
+print(f"Consumption DataFrame ready: {consumption_df.count()} records")
+
+# ============================================================================
+# CELL 20: GET DISTINCT DATES FOR PARTITION PRUNING
+# ============================================================================
+# Purpose: Get distinct usage dates for MERGE partition pruning optimization
+# Reference: consume_interval_data_files.py:48-54
+#
+# Original PySpark:
+#   distinct_usage_dates = spark.sql(f"""
+#       SELECT DISTINCT aep_usage_dt
+#       FROM default.interval_data_files_{var_opco}_xfrm_vw
+#   """).rdd.flatMap(lambda x: x).collect()
+#   usage_dates_str = ', '.join([f"'{date}'" for date in distinct_usage_dates])
+#
+# This optimization tells the MERGE to only scan relevant date partitions
+# in the target table instead of scanning all historical data
+# ============================================================================
+
+print("\n=== STEP 8: Get Distinct Dates for Partition Pruning ===")
+print("Reference: consume_interval_data_files.py:48-54")
+
+# Get distinct dates from the consumption DataFrame
+distinct_dates = consumption_df.select("aep_usage_dt").distinct().collect()
+usage_dates_list = [row.aep_usage_dt for row in distinct_dates if row.aep_usage_dt is not None]
+usage_dates_str = ",".join([f"'{date}'" for date in usage_dates_list])
+
+print(f"Distinct dates to process: {len(usage_dates_list)}")
+print(f"Date range: {min(usage_dates_list) if usage_dates_list else 'N/A'} to {max(usage_dates_list) if usage_dates_list else 'N/A'}")
+print(f"USAGE_DATES string: {usage_dates_str[:100]}..." if len(usage_dates_str) > 100 else f"USAGE_DATES string: {usage_dates_str}")
+
+# ============================================================================
+# CELL 21: CREATE TEMP VIEW FOR MERGE
+# ============================================================================
+# Purpose: Create temporary view for use in MERGE SQL statement
+# ============================================================================
+
+consumption_df.createOrReplaceTempView("source_data")
+print("Temporary view 'source_data' created for MERGE operation")
+
+# ============================================================================
+# CELL 22: EXECUTE MERGE INTO TARGET TABLE
+# ============================================================================
+# Purpose: MERGE (Upsert) data into final Iceberg table
+# Reference: usage_nonvee.reading_ivl_nonvee.dml
+# Reference: consume_interval_data_files.py:56-72
+#
+# MERGE Logic:
+#   - WHEN MATCHED: UPDATE existing records (hdp_update_user = 'info-update')
+#   - WHEN NOT MATCHED: INSERT new records (hdp_update_user = 'info-insert')
+#
+# MERGE Key (determines if record exists):
+#   - aep_usage_dt (partition key - for pruning)
+#   - aep_meter_bucket (partition key)
+#   - serialnumber
+#   - aep_channel_id
+#   - aep_raw_uom
+#   - endtimeperiod
+# ============================================================================
+
+print("\n=== STEP 9: MERGE INTO TARGET TABLE ===")
+print(f"Target Table: {TARGET_TABLE}")
+print("Reference: usage_nonvee.reading_ivl_nonvee.dml")
+
+# Build MERGE SQL statement
+# Reference: usage_nonvee.reading_ivl_nonvee.dml:1-185
+merge_sql = f"""
+MERGE INTO {TARGET_TABLE} AS t
+USING source_data AS s
+ON t.aep_usage_dt IN ({usage_dates_str})
+   AND t.aep_usage_dt = s.aep_usage_dt
+   AND t.aep_meter_bucket = s.aep_meter_bucket
+   AND t.serialnumber = s.serialnumber
+   AND t.aep_channel_id = s.aep_channel_id
+   AND t.aep_raw_uom = s.aep_raw_uom
+   AND t.endtimeperiod = s.endtimeperiod
+
+WHEN MATCHED THEN
+    UPDATE SET
+        t.aep_srvc_qlty_idntfr = s.aep_srvc_qlty_idntfr,
+        t.aep_channel_id = s.aep_channel_id,
+        t.aep_sec_per_intrvl = s.aep_sec_per_intrvl,
+        t.aep_meter_alias = s.aep_meter_alias,
+        t.aep_meter_program = s.aep_meter_program,
+        t.aep_usage_type = s.aep_usage_type,
+        t.aep_timezone_cd = s.aep_timezone_cd,
+        t.endtimeperiod = s.endtimeperiod,
+        t.starttimeperiod = s.starttimeperiod,
+        t.value = s.value,
+        t.aep_raw_value = s.aep_raw_value,
+        t.scalarfloat = s.scalarfloat,
+        t.aep_acct_cls_cd = s.aep_acct_cls_cd,
+        t.aep_acct_type_cd = s.aep_acct_type_cd,
+        t.aep_mtr_pnt_nb = s.aep_mtr_pnt_nb,
+        t.aep_comp_mtr_mltplr = s.aep_comp_mtr_mltplr,
+        t.aep_endtime_utc = s.aep_endtime_utc,
+        t.aep_mtr_removal_ts = s.aep_mtr_removal_ts,
+        t.aep_mtr_install_ts = s.aep_mtr_install_ts,
+        t.aep_city = s.aep_city,
+        t.aep_zip = s.aep_zip,
+        t.aep_state = s.aep_state,
+        t.hdp_update_user = 'info-update',
+        t.hdp_update_dttm = s.hdp_update_dttm,
+        t.authority = s.authority
+
+WHEN NOT MATCHED THEN
+    INSERT (
+        serialnumber, source, aep_devicecode, isvirtual_meter, timezoneoffset,
+        aep_premise_nb, aep_service_point, aep_srvc_dlvry_id, name_register,
+        isvirtual_register, toutier, toutiername, aep_derived_uom, aep_raw_uom,
+        aep_srvc_qlty_idntfr, aep_channel_id, aep_sec_per_intrvl, aep_meter_alias,
+        aep_meter_program, aep_billable_ind, aep_usage_type, aep_timezone_cd,
+        endtimeperiod, starttimeperiod, value, aep_raw_value, scalarfloat,
+        aep_data_quality_cd, aep_data_validation, aep_acct_cls_cd, aep_acct_type_cd,
+        aep_mtr_pnt_nb, aep_tarf_pnt_nb, aep_comp_mtr_mltplr, aep_endtime_utc,
+        aep_mtr_removal_ts, aep_mtr_install_ts, aep_city, aep_zip, aep_state,
+        hdp_update_user, hdp_insert_dttm, hdp_update_dttm, authority, aep_opco,
+        aep_usage_dt, aep_meter_bucket
+    )
+    VALUES (
+        s.serialnumber, s.source, s.aep_devicecode, s.isvirtual_meter, s.timezoneoffset,
+        s.aep_premise_nb, s.aep_service_point, s.aep_srvc_dlvry_id, s.name_register,
+        s.isvirtual_register, s.toutier, s.toutiername, s.aep_derived_uom, s.aep_raw_uom,
+        s.aep_srvc_qlty_idntfr, s.aep_channel_id, s.aep_sec_per_intrvl, s.aep_meter_alias,
+        s.aep_meter_program, s.aep_billable_ind, s.aep_usage_type, s.aep_timezone_cd,
+        s.endtimeperiod, s.starttimeperiod, s.value, s.aep_raw_value, s.scalarfloat,
+        s.aep_data_quality_cd, s.aep_data_validation, s.aep_acct_cls_cd, s.aep_acct_type_cd,
+        s.aep_mtr_pnt_nb, s.aep_tarf_pnt_nb, s.aep_comp_mtr_mltplr, s.aep_endtime_utc,
+        s.aep_mtr_removal_ts, s.aep_mtr_install_ts, s.aep_city, s.aep_zip, s.aep_state,
+        'info-insert', s.hdp_insert_dttm, s.hdp_update_dttm, s.authority, s.aep_opco,
+        s.aep_usage_dt, s.aep_meter_bucket
+    )
+"""
+
+# Execute MERGE (uncomment when ready to run against actual table)
+# print("Executing MERGE...")
+# spark.sql(merge_sql)
+# print("MERGE completed successfully!")
+
+print("MERGE SQL generated (uncomment spark.sql(merge_sql) to execute)")
+print(f"\nMERGE SQL Preview:\n{merge_sql[:500]}...")
+
+# ============================================================================
+# CELL 23: DOWNSTREAM INCREMENTAL INSERT (OPTIONAL)
+# ============================================================================
+# Purpose: Insert new records to downstream incremental table
+# Reference: insert_reading_ivl_nonvee_incr_info.dml
+#
+# This table is used by downstream systems for incremental processing
+# Only records with data_type='new' are inserted
+# ============================================================================
+
+print("\n=== STEP 10: Downstream Incremental (Optional) ===")
+print("Reference: insert_reading_ivl_nonvee_incr_info.dml")
+
+downstream_df = (
+    transform_df
+    .filter(
+        (col("data_type") == "new") & 
+        (col("aep_opco") == OPCO)
+    )
+    .select(
+        col("serialnumber"),
+        col("source"),
+        col("aep_devicecode"),
+        col("isvirtual_meter"),
+        col("timezoneoffset"),
+        col("aep_premise_nb"),
+        col("aep_service_point"),
+        col("aep_mtr_install_ts"),
+        col("aep_mtr_removal_ts"),
+        col("aep_srvc_dlvry_id"),
+        col("aep_comp_mtr_mltplr"),
+        col("name_register"),
+        col("isvirtual_register"),
+        col("toutier"),
+        col("toutiername"),
+        col("aep_srvc_qlty_idntfr"),
+        col("aep_channel_id"),
+        col("aep_raw_uom"),
+        col("aep_sec_per_intrvl"),
+        col("aep_meter_alias"),
+        col("aep_meter_program"),
+        col("aep_billable_ind"),
+        col("aep_usage_type"),
+        col("aep_timezone_cd"),
+        col("endtimeperiod"),
+        col("starttimeperiod"),
+        col("value"),
+        col("aep_raw_value"),
+        col("scalarfloat"),
+        col("aep_data_quality_cd"),
+        col("aep_data_validation"),
+        col("aep_acct_cls_cd"),
+        col("aep_acct_type_cd"),
+        col("aep_mtr_pnt_nb"),
+        col("aep_tarf_pnt_nb"),
+        col("aep_endtime_utc"),
+        col("aep_city"),
+        col("aep_zip"),
+        col("aep_state"),
+        col("hdp_update_user"),
+        col("hdp_insert_dttm"),
+        col("hdp_update_dttm"),
+        col("authority"),
+        col("aep_usage_dt"),
+        col("aep_derived_uom"),
+        col("aep_opco"),
+        # Reference: insert_reading_ivl_nonvee_incr_info.dml:50
+        date_format(current_timestamp(), "yyyyMMdd_HHmmss").alias("run_date")
+    )
+)
+
+print(f"Downstream incremental records: {downstream_df.count()}")
+
+# Uncomment to write to downstream table
+# downstream_df.writeTo(DOWNSTREAM_TABLE).partitionedBy("aep_opco", "run_date").append()
+
+# ============================================================================
+# CELL 24: PIPELINE SUMMARY
+# ============================================================================
+# Purpose: Display record counts and summary for each transformation step
+# ============================================================================
+
+print("\n" + "=" * 80)
+print("PIPELINE TRANSFORMATION SUMMARY")
+print("=" * 80)
+
+print(f"""
+OPCO: {OPCO}
+Target Table: {TARGET_TABLE}
+
+Step                                    | Records      | Reference
+----------------------------------------|--------------|------------------------------------------
+1. Raw XML Load                         | {df_raw.count():>12,} | source_interval_data_files.sh
+2a. First EXPLODE (Interval)            | {df_interval_exploded.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:68
+2b. Second EXPLODE (Reading)            | {df_reading_exploded.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:73
+2c. NOT NULL Filter                     | {df_filtered.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:76-81
+2d. Time Calculations                   | {df_with_times.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:39-41
+2e. UOM Mapping JOIN                    | {df_with_uom.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:86-88
+2f. Date Filter (>=2015-03-01)          | {df_source_view.count():>12,} | stg_nonvee.interval_data_files_oh_src_vw.ddl:70
+3. Stage (MACS JOIN)                    | {stage_df.count():>12,} | stage_interval_xml_files.sh:194-273
+4. Stage View (Derived Fields)          | {stage_view_df.count():>12,} | stg_nonvee.interval_data_files_oh_stg_vw.ddl
+5. Transform (Type Casting)             | {transform_df.count():>12,} | stg_nonvee.interval_data_files_oh_xfrm.ddl
+6. Transform View (Deduplication)       | {transform_view_df.count():>12,} | stg_nonvee.interval_data_files_oh_xfrm_vw.ddl
+7. Consumption (Final)                  | {consumption_df.count():>12,} | usage_nonvee.reading_ivl_nonvee.dml
+----------------------------------------|--------------|------------------------------------------
+Distinct Dates for MERGE                | {len(usage_dates_list):>12,} | consume_interval_data_files.py:48-54
+Duplicates Removed                      | {transform_df.count() - transform_view_df.count():>12,} | ROW_NUMBER() deduplication
+""")
+
+print("=" * 80)
+print("PIPELINE COMPLETE - Ready for MERGE execution")
+print("=" * 80)
