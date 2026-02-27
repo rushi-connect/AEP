@@ -124,13 +124,28 @@ interval_data_files_oh_src_df = (
 interval_data_files_oh_src_df.printSchema()
 
 
-# Cell 7: Create df_uom_mapping (Reference Table)
-# ============================================================================
-# Reference: usage_nonvee.uom_mapping
-# Used In: stg_nonvee.interval_data_files_oh_src_vw.ddl (lines 86-88)
-# Purpose: Maps channel to derived UOM, register name, service quality
-# ============================================================================
 
+# ============================================================
+# SCRIPT 2: stg_nonvee.interval_data_files_oh_src_vw
+# Source: scripts/ddl/stg_nonvee.interval_data_files_oh_src_vw.ddl
+# Called by: scripts/source_interval_data_files.sh
+# ============================================================
+# 
+# LOGIC:
+# 1. 1st EXPLODE: Flatten interval_reading array → get int_endtime, int_reading, etc.
+# 2. 2nd EXPLODE: Flatten int_reading array → get channel, rawvalue, value, uom
+# 3. Time Calculations: starttime = endtime - (IntervalLength * 60 seconds)
+# 4. Filter: Remove records where channel/rawvalue/value/uom is NULL
+# 5. LEFT JOIN: Join with uom_mapping to get aep_derived_uom, name_register, etc.
+#
+# ============================================================
+
+from pyspark.sql import functions as f
+from pyspark.sql.types import StructType, StructField, StringType
+
+# ------------------------------------------------------------
+# UOM Mapping Reference Table
+# ------------------------------------------------------------
 uom_data = [
     ("oh", "1", "KWH", "kwh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "N"),
     ("oh", "2", "KW", "kw", "kW_del_mtr_ivl_len_min", "DEMAND", "N"),
@@ -154,225 +169,115 @@ uom_schema = StructType([
     StructField("value_mltplr_flg", StringType())
 ])
 
-df_uom_mapping = spark.createDataFrame(uom_data, uom_schema)
-df_uom_mapping.show(truncate=False)
+uom_mapping_df = spark.createDataFrame(uom_data, uom_schema)
 
-# Cell 8: First EXPLODE - Interval Array
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (line 68)
-# Transformation: LATERAL VIEW EXPLODE(a.Interval_reading) exp_interval
-# Purpose: Explode the Interval array (middle level) - one row per interval
-# ============================================================================
-
-df_interval_exploded = (
-    df_raw
+# ------------------------------------------------------------
+# STEP 1: 1st EXPLODE on interval_reading
+# ------------------------------------------------------------
+step1_df = (
+    interval_data_files_oh_src_df
+    .withColumn("filename", f.input_file_name())
+    .withColumn("exp_interval", f.explode("interval_reading.Interval"))
     .select(
-        F.trim(F.col("MeterName")).alias("MeterName"),
-        F.col("UtilDeviceID"),
-        F.col("MacID"),
-        F.col("IntervalReadData._IntervalLength").alias("IntervalLength"),
-        F.col("IntervalReadData._StartTime").alias("blockstarttime"),
-        F.col("IntervalReadData._EndTime").alias("blockendtime"),
-        F.col("IntervalReadData._NumberIntervals").alias("NumberIntervals"),
-        F.col("IntervalReadData.Interval").alias("interval_arr")
+        f.col("filename"),
+        f.col("metername").alias("MeterName"),
+        f.col("utildeviceid").alias("UtilDeviceID"),
+        f.col("macid").alias("MacID"),
+        f.col("interval_reading._IntervalLength").alias("IntervalLength"),
+        f.col("interval_reading._StartTime").alias("blockstarttime"),
+        f.col("interval_reading._EndTime").alias("blockendtime"),
+        f.col("interval_reading._NumberIntervals").alias("NumberIntervals"),
+        f.col("part_date"),
+        f.col("exp_interval._EndTime").alias("int_endtime"),
+        f.col("exp_interval._GatewayCollectedTime").alias("int_gatewaycollectedtime"),
+        f.col("exp_interval._BlockSequenceNumber").alias("int_blocksequencenumber"),
+        f.col("exp_interval._IntervalSequenceNumber").alias("int_intervalsequencenumber"),
+        f.col("exp_interval.Reading").alias("int_reading")
     )
-    # LATERAL VIEW EXPLODE - First level
-    .withColumn("interval_exploded", F.explode(F.col("interval_arr")))
-    .select(
-        F.col("MeterName"),
-        F.col("UtilDeviceID"),
-        F.col("MacID"),
-        F.col("IntervalLength"),
-        F.col("blockstarttime"),
-        F.col("blockendtime"),
-        F.col("NumberIntervals"),
-        F.col("interval_exploded._EndTime").alias("int_endtime"),
-        F.col("interval_exploded._GatewayCollectedTime").alias("int_gatewaycollectedtime"),
-        F.col("interval_exploded._BlockSequenceNumber").alias("int_blocksequencenumber"),
-        F.col("interval_exploded._IntervalSequenceNumber").alias("int_intervalsequencenumber"),
-        F.col("interval_exploded.Reading").alias("reading_arr")
-    )
-)
-
-df_interval_exploded.printSchema()
-df_interval_exploded.show(5, truncate=False)
-
-# Cell 9: Second EXPLODE - Reading Array
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (line 73)
-# Transformation: LATERAL VIEW EXPLODE(t.int_reading) exp_reading
-# Purpose: Explode the Reading array (inner level) - one row per channel reading
-# ============================================================================
-
-df_reading_exploded = (
-    df_interval_exploded
-    # LATERAL VIEW EXPLODE - Second level (Reading/Channel)
-    .withColumn("reading_exploded", F.explode(F.col("reading_arr")))
-    .select(
-        F.col("MeterName"),
-        F.col("UtilDeviceID"),
-        F.col("MacID"),
-        F.col("IntervalLength"),
-        F.col("blockstarttime"),
-        F.col("blockendtime"),
-        F.col("NumberIntervals"),
-        F.col("int_endtime"),
-        F.col("int_gatewaycollectedtime"),
-        F.col("int_blocksequencenumber"),
-        F.col("int_intervalsequencenumber"),
-        F.col("reading_exploded._Channel").alias("channel"),
-        F.col("reading_exploded._RawValue").alias("rawvalue"),
-        F.col("reading_exploded._Value").alias("value"),
-        F.col("reading_exploded._UOM").alias("uom")
-    )
-)
-
-df_reading_exploded.printSchema()
-df_reading_exploded.show(10, truncate=False)
-
-# Cell 10: Apply NOT NULL Filter
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (lines 76-81)
-# Transformation: WHERE channel IS NOT NULL AND rawvalue IS NOT NULL 
-#                 AND value IS NOT NULL AND uom IS NOT NULL
-# Purpose: Drop garbage/incomplete records
-# ============================================================================
-
-df_filtered = (
-    df_reading_exploded
     .filter(
-        F.col("channel").isNotNull() &
-        F.col("rawvalue").isNotNull() &
-        F.col("value").isNotNull() &
-        F.col("uom").isNotNull()
+        f.date_format(
+            f.to_timestamp(f.substring("blockstarttime", 1, 10), "yyyy-MM-dd"),
+            "yyyyMMdd"
+        ).cast("int") >= 20150301
     )
 )
 
-df_filtered.show(10, truncate=False)
-
-# Cell 11: Calculate starttime, endtime, interval_epoch
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (lines 39-41)
-# Transformations:
-#   - starttime = from_unixtime(unix_timestamp(endtime) - (IntervalLength * 60))
-#   - endtime = from_unixtime(unix_timestamp(int_endtime))
-#   - interval_epoch = SUBSTR(int_endtime, -6, 6) (timezone offset)
-# ============================================================================
-
-df_with_times = (
-    df_filtered
-    # Convert timestamp to string for manipulation
-    .withColumn("int_endtime_str", F.date_format(F.col("int_endtime"), "yyyy-MM-dd'T'HH:mm:ss"))
-    
-    # interval_epoch = last 6 characters (timezone offset like -05:00)
-    # Since timestamp doesn't have timezone in spark, we'll use a default
-    .withColumn("interval_epoch", F.lit("-05:00"))
-    
-    # starttime = endtime - (IntervalLength * 60 seconds)
-    .withColumn(
-        "starttime",
-        F.from_unixtime(
-            F.unix_timestamp(F.col("int_endtime_str"), "yyyy-MM-dd'T'HH:mm:ss")
-            - (F.col("IntervalLength").cast("int") * 60),
-            "yyyy-MM-dd'T'HH:mm:ss"
-        )
-    )
-    
-    # endtime formatted
-    .withColumn(
-        "endtime",
-        F.from_unixtime(
-            F.unix_timestamp(F.col("int_endtime_str"), "yyyy-MM-dd'T'HH:mm:ss"),
-            "yyyy-MM-dd'T'HH:mm:ss"
-        )
-    )
-)
-
-df_with_times.select("MeterName", "IntervalLength", "starttime", "endtime", "interval_epoch").show(5, truncate=False)
-
-# Cell 12: Join with UOM Mapping
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (lines 86-88)
-# Transformation: LEFT JOIN usage_nonvee.uom_mapping um 
-#                 ON reading.channel = um.aep_channel_id
-# Purpose: Get derived UOM, register name, service quality identifier
-# ============================================================================
-
-df_with_uom = (
-    df_with_times.alias("r")
-    .join(
-        df_uom_mapping.alias("u"),
-        F.col("r.channel").cast("string") == F.col("u.aep_channel_id"),
-        "left"
-    )
+# ------------------------------------------------------------
+# STEP 2: 2nd EXPLODE on int_reading + time calculations
+# ------------------------------------------------------------
+step2_df = (
+    step1_df
+    .withColumn("exp_reading", f.explode("int_reading"))
     .select(
-        F.col("r.MeterName"),
-        F.col("r.UtilDeviceID"),
-        F.col("r.MacID"),
-        F.col("r.IntervalLength"),
-        F.col("r.blockstarttime"),
-        F.col("r.blockendtime"),
-        F.col("r.NumberIntervals"),
-        F.col("r.starttime"),
-        F.col("r.endtime"),
-        F.col("r.interval_epoch"),
-        F.col("r.int_gatewaycollectedtime"),
-        F.col("r.int_blocksequencenumber"),
-        F.col("r.int_intervalsequencenumber"),
-        F.col("r.channel"),
-        F.col("r.rawvalue"),
-        F.col("r.value"),
-        F.lower(F.trim(F.col("r.uom"))).alias("uom"),
-        # UOM Mapping fields with NVL defaults
-        F.coalesce(F.col("u.aep_derived_uom"), F.lit("UNK")).alias("aep_uom"),
-        F.when(
-            F.col("u.name_register").isNotNull(),
-            F.regexp_replace(F.col("u.name_register"), "mtr_ivl_len", F.col("r.IntervalLength").cast("string"))
-        ).otherwise(F.lit("UNK")).alias("name_register"),
-        F.coalesce(F.col("u.aep_srvc_qlty_idntfr"), F.lit("UNK")).alias("aep_sqi"),
-        F.col("u.value_mltplr_flg")
+        f.col("filename"),
+        f.col("MeterName"),
+        f.col("UtilDeviceID"),
+        f.col("MacID"),
+        f.col("IntervalLength"),
+        f.col("blockstarttime"),
+        f.col("blockendtime"),
+        f.col("NumberIntervals"),
+        f.from_unixtime(
+            f.unix_timestamp(f.substring("int_endtime", 1, 19), "yyyy-MM-dd'T'HH:mm:ss")
+            - (f.col("IntervalLength").cast("int") * 60),
+            "yyyy-MM-dd'T'HH:mm:ss"
+        ).alias("starttime"),
+        f.from_unixtime(
+            f.unix_timestamp(f.substring("int_endtime", 1, 19), "yyyy-MM-dd'T'HH:mm:ss"),
+            "yyyy-MM-dd'T'HH:mm:ss"
+        ).alias("endtime"),
+        f.substring("int_endtime", -6, 6).alias("interval_epoch"),
+        f.col("int_gatewaycollectedtime"),
+        f.col("int_blocksequencenumber"),
+        f.col("int_intervalsequencenumber"),
+        f.col("exp_reading._Channel").alias("channel"),
+        f.col("exp_reading._RawValue").alias("rawvalue"),
+        f.col("exp_reading._Value").alias("value"),
+        f.col("exp_reading._UOM").alias("uom"),
+        f.col("part_date")
     )
-)
-
-df_with_uom.show(10, truncate=False)
-
-# Cell 13: Apply Date Filter
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (line 70)
-# Transformation: WHERE from_unixtime(substr(starttime,0,10)) >= '20150301'
-# Purpose: Filter records with starttime >= 2015-03-01
-# ============================================================================
-
-df_source_vw = (
-    df_with_uom
     .filter(
-        F.date_format(F.to_date(F.substring(F.col("starttime"), 1, 10), "yyyy-MM-dd"), "yyyyMMdd").cast("int") >= 20150301
+        f.col("channel").isNotNull() &
+        f.col("rawvalue").isNotNull() &
+        f.col("value").isNotNull() &
+        f.col("uom").isNotNull()
     )
 )
 
-df_source_vw.show(10, truncate=False)
+# ------------------------------------------------------------
+# STEP 3: LEFT JOIN with uom_mapping + final SELECT
+# ------------------------------------------------------------
+interval_data_files_oh_src_vw_df = (
+    step2_df
+    .join(uom_mapping_df, step2_df.channel == uom_mapping_df.aep_channel_id, "left")
+    .select(
+        f.col("filename"),
+        f.trim(f.col("MeterName")).alias("MeterName"),
+        f.col("UtilDeviceID"),
+        f.col("MacID"),
+        f.col("IntervalLength"),
+        f.col("blockstarttime"),
+        f.col("blockendtime"),
+        f.col("NumberIntervals"),
+        f.concat(f.col("starttime"), f.col("interval_epoch")).alias("starttime"),
+        f.concat(f.col("endtime"), f.col("interval_epoch")).alias("endtime"),
+        f.col("interval_epoch"),
+        f.col("int_gatewaycollectedtime"),
+        f.col("int_blocksequencenumber"),
+        f.col("int_intervalsequencenumber"),
+        f.col("channel"),
+        f.col("rawvalue"),
+        f.col("value"),
+        f.lower(f.trim(f.col("uom"))).alias("uom"),
+        f.col("part_date"),
+        f.coalesce(f.col("aep_derived_uom"), f.lit("UNK")).alias("aep_uom"),
+        f.when(
+            f.col("name_register").isNotNull(),
+            f.regexp_replace(f.col("name_register"), "mtr_ivl_len", f.col("IntervalLength"))
+        ).otherwise(f.lit("UNK")).alias("name_register"),
+        f.coalesce(f.col("aep_srvc_qlty_idntfr"), f.lit("UNK")).alias("aep_sqi"),
+        f.col("value_mltplr_flg")
+    )
+)
 
-# Cell 14: Final Source View - Equivalent to stg_nonvee.interval_data_files_oh_src_vw
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src_vw.ddl (complete view)
-# This is the final flattened/exploded/filtered DataFrame
-# Ready for next step: Stage (join with meter_premise_macs_ami)
-# ============================================================================
-
-df_source_vw.printSchema()
-df_source_vw.count()
-
-# Cell 15: View sample data
-df_source_vw.select(
-    "MeterName",
-    "IntervalLength", 
-    "starttime",
-    "endtime",
-    "channel",
-    "rawvalue",
-    "value",
-    "uom",
-    "aep_uom",
-    "name_register",
-    "aep_sqi"
-).show(20, truncate=False)
+interval_data_files_oh_src_vw_df.printSchema()
