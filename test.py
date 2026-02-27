@@ -281,7 +281,6 @@ interval_data_files_oh_src_vw_df = (
 
 interval_data_files_oh_src_vw_df.printSchema()
 
-
 # ============================================================
 # SCRIPT 3: stg_nonvee.interval_data_files_oh_stg
 # Source: scripts/ddl/stg_nonvee.interval_data_files_oh_stg.ddl
@@ -292,7 +291,7 @@ interval_data_files_oh_src_vw_df.printSchema()
 # 1. Read from interval_data_files_oh_src_vw_df (Script 2)
 # 2. Read MACS reference table from Glue catalog
 # 3. LEFT JOIN on metername + time window validation
-# 4. Rename/transform columns to match DDL
+# 4. Rename/transform columns to match DDL (41 columns)
 #
 # ============================================================
 
@@ -328,10 +327,15 @@ macs_df = (
         f.lit(None).cast(StringType()).alias("cmsg_mtr_mult_nb"),
         f.col("mtr_inst_ts"),
         f.col("mtr_rmvl_ts"),
-        f.to_timestamp(f.col("mtr_inst_ts"), "yyyy-MM-dd HH:mm:ss").cast("long").alias("unix_mtr_inst_ts"),
-        f.to_timestamp(f.col("mtr_rmvl_ts"), "yyyy-MM-dd").cast("long").alias("unix_mtr_rmvl_ts"),
-        f.to_timestamp(f.col("acct_turn_on_dt"), "yyyy-MM-dd").cast("long").alias("unix_acct_turn_on_dt"),
-        f.to_timestamp(f.col("acct_turn_off_dt"), "yyyy-MM-dd").cast("long").alias("unix_acct_turn_off_dt"),
+        f.unix_timestamp("mtr_inst_ts", "yyyy-MM-dd HH:mm:ss").alias("unix_mtr_inst_ts"),
+        f.when(
+            f.col("mtr_rmvl_ts") == "9999-01-01",
+            f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd")
+        ).otherwise(
+            f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd HH:mm:ss")
+        ).alias("unix_mtr_rmvl_ts"),
+        f.unix_timestamp("acct_turn_on_dt", "yyyy-MM-dd").alias("unix_acct_turn_on_dt"),
+        f.unix_timestamp("acct_turn_off_dt", "yyyy-MM-dd").alias("unix_acct_turn_off_dt"),
         f.col("serv_city_ad").alias("aep_city"),
         f.col("serv_zip_ad").alias("aep_zip"),
         f.col("state_cd").alias("aep_state")
@@ -339,11 +343,11 @@ macs_df = (
 )
 
 # ------------------------------------------------------------
-# LEFT JOIN with MACS + SELECT
+# LEFT JOIN with MACS + SELECT (41 columns)
 # ------------------------------------------------------------
 interval_data_files_oh_stg_df = (
     interval_data_files_oh_src_vw_df
-    .withColumn("unix_endtime", f.to_timestamp("endtime", "yyyy-MM-dd'T'HH:mm:ssXXX").cast("long"))
+    .withColumn("unix_endtime", f.unix_timestamp("endtime", "yyyy-MM-dd'T'HH:mm:ssXXX"))
     .join(
         macs_df,
         (f.col("MeterName") == f.col("mfr_devc_ser_nbr")) &
