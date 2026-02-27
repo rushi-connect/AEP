@@ -280,3 +280,120 @@ interval_data_files_oh_src_vw_df = (
 )
 
 interval_data_files_oh_src_vw_df.printSchema()
+
+
+# ============================================================
+# SCRIPT 3: stg_nonvee.interval_data_files_oh_stg
+# Source: scripts/ddl/stg_nonvee.interval_data_files_oh_stg.ddl
+#         scripts/stage_interval_xml_files.sh (Lines 194-272)
+# ============================================================
+#
+# LOGIC:
+# 1. Read from interval_data_files_oh_src_vw_df (Script 2)
+# 2. Read MACS reference table from Glue catalog
+# 3. LEFT JOIN on metername + time window validation
+# 4. Rename/transform columns to match DDL
+#
+# ============================================================
+
+from pyspark.sql import functions as f
+from pyspark.sql.types import StringType
+
+# Parameters
+VAR_OPCO = "oh"
+HDP_UPDATE_USER = "info-insert"
+target_companies = ["10", "07"]
+
+# ------------------------------------------------------------
+# MACS Reference Table (from Glue Catalog)
+# ------------------------------------------------------------
+macs_df = (
+    spark.table("stg_nonvee.meter_premise_macs_ami")
+    .filter(f.col("co_cd_ownr").isin(target_companies))
+    .select(
+        f.col("prem_nb"),
+        f.col("bill_cnst"),
+        f.col("acct_clas_cd"),
+        f.col("acct_type_cd"),
+        f.col("devc_cd"),
+        f.col("pgm_id_nm"),
+        f.concat(
+            f.coalesce(f.col("tx_mand_data"), f.lit("")),
+            f.coalesce(f.col("doe_nb"), f.lit("")),
+            f.coalesce(f.col("serv_deliv_id"), f.lit(""))
+        ).alias("sd"),
+        f.col("mfr_devc_ser_nbr"),
+        f.col("mtr_pnt_nb"),
+        f.col("tarf_pnt_nb"),
+        f.lit(None).cast(StringType()).alias("cmsg_mtr_mult_nb"),
+        f.col("mtr_inst_ts"),
+        f.col("mtr_rmvl_ts"),
+        f.to_timestamp(f.col("mtr_inst_ts"), "yyyy-MM-dd HH:mm:ss").cast("long").alias("unix_mtr_inst_ts"),
+        f.to_timestamp(f.col("mtr_rmvl_ts"), "yyyy-MM-dd").cast("long").alias("unix_mtr_rmvl_ts"),
+        f.to_timestamp(f.col("acct_turn_on_dt"), "yyyy-MM-dd").cast("long").alias("unix_acct_turn_on_dt"),
+        f.to_timestamp(f.col("acct_turn_off_dt"), "yyyy-MM-dd").cast("long").alias("unix_acct_turn_off_dt"),
+        f.col("serv_city_ad").alias("aep_city"),
+        f.col("serv_zip_ad").alias("aep_zip"),
+        f.col("state_cd").alias("aep_state")
+    )
+)
+
+# ------------------------------------------------------------
+# LEFT JOIN with MACS + SELECT
+# ------------------------------------------------------------
+interval_data_files_oh_stg_df = (
+    interval_data_files_oh_src_vw_df
+    .withColumn("unix_endtime", f.to_timestamp("endtime", "yyyy-MM-dd'T'HH:mm:ssXXX").cast("long"))
+    .join(
+        macs_df,
+        (f.col("MeterName") == f.col("mfr_devc_ser_nbr")) &
+        (f.col("unix_endtime").between(f.col("unix_mtr_inst_ts"), f.col("unix_mtr_rmvl_ts"))) &
+        (f.col("unix_endtime").between(f.col("unix_acct_turn_on_dt"), f.col("unix_acct_turn_off_dt"))),
+        "left"
+    )
+    .select(
+        f.col("filename"),
+        f.lit(VAR_OPCO).alias("aep_opco"),
+        f.col("MeterName").alias("serialnumber"),
+        f.col("UtilDeviceID").alias("utildeviceid"),
+        f.col("MacID").alias("macid"),
+        f.col("IntervalLength").alias("intervallength"),
+        f.col("blockstarttime"),
+        f.col("blockendtime"),
+        f.col("NumberIntervals").alias("numberintervals"),
+        f.col("starttime"),
+        f.col("endtime"),
+        f.col("interval_epoch"),
+        f.col("int_gatewaycollectedtime"),
+        f.col("int_blocksequencenumber"),
+        f.col("int_intervalsequencenumber"),
+        f.col("channel"),
+        f.col("value").alias("aep_raw_value"),
+        f.col("value"),
+        f.col("uom").alias("aep_raw_uom"),
+        f.upper(f.col("aep_uom")).alias("aep_derived_uom"),
+        f.col("name_register"),
+        f.col("aep_sqi").alias("aep_srvc_qlty_idntfr"),
+        f.col("prem_nb").alias("aep_premise_nb"),
+        f.col("bill_cnst"),
+        f.col("acct_clas_cd").alias("aep_acct_cls_cd"),
+        f.col("acct_type_cd").alias("aep_acct_type_cd"),
+        f.col("devc_cd").alias("aep_devicecode"),
+        f.col("pgm_id_nm").alias("aep_meter_program"),
+        f.col("sd").alias("aep_srvc_dlvry_id"),
+        f.col("mtr_pnt_nb").alias("aep_mtr_pnt_nb"),
+        f.col("tarf_pnt_nb").alias("aep_tarf_pnt_nb"),
+        f.col("cmsg_mtr_mult_nb").alias("aep_comp_mtr_mltplr"),
+        f.col("mtr_rmvl_ts").alias("aep_mtr_removal_ts"),
+        f.col("mtr_inst_ts").alias("aep_mtr_install_ts"),
+        f.col("aep_city"),
+        f.substring(f.col("aep_zip"), 1, 5).alias("aep_zip"),
+        f.col("aep_state"),
+        f.lit(HDP_UPDATE_USER).alias("hdp_update_user"),
+        f.col("part_date"),
+        f.col("value_mltplr_flg"),
+        f.substring(f.trim(f.col("MeterName")), -2, 2).alias("aep_meter_bucket")
+    )
+)
+
+interval_data_files_oh_stg_df.printSchema()
