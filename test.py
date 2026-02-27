@@ -124,7 +124,6 @@ interval_data_files_oh_src_df = (
 interval_data_files_oh_src_df.printSchema()
 
 
-
 # ============================================================
 # SCRIPT 2: stg_nonvee.interval_data_files_oh_src_vw
 # Source: scripts/ddl/stg_nonvee.interval_data_files_oh_src_vw.ddl
@@ -172,9 +171,9 @@ uom_schema = StructType([
 uom_mapping_df = spark.createDataFrame(uom_data, uom_schema)
 
 # ------------------------------------------------------------
-# STEP 1: 1st EXPLODE on interval_reading
+# 1st EXPLODE: Flatten interval_reading array
 # ------------------------------------------------------------
-step1_df = (
+interval_exploded_df = (
     interval_data_files_oh_src_df
     .withColumn("filename", f.input_file_name())
     .withColumn("exp_interval", f.explode("interval_reading.Interval"))
@@ -203,10 +202,10 @@ step1_df = (
 )
 
 # ------------------------------------------------------------
-# STEP 2: 2nd EXPLODE on int_reading + time calculations
+# 2nd EXPLODE: Flatten int_reading array + time calculations
 # ------------------------------------------------------------
-step2_df = (
-    step1_df
+reading_exploded_df = (
+    interval_exploded_df
     .withColumn("exp_reading", f.explode("int_reading"))
     .select(
         f.col("filename"),
@@ -245,11 +244,11 @@ step2_df = (
 )
 
 # ------------------------------------------------------------
-# STEP 3: LEFT JOIN with uom_mapping + final SELECT
+# LEFT JOIN with uom_mapping + final SELECT
 # ------------------------------------------------------------
 interval_data_files_oh_src_vw_df = (
-    step2_df
-    .join(uom_mapping_df, step2_df.channel == uom_mapping_df.aep_channel_id, "left")
+    reading_exploded_df
+    .join(uom_mapping_df, reading_exploded_df.channel == uom_mapping_df.aep_channel_id, "left")
     .select(
         f.col("filename"),
         f.trim(f.col("MeterName")).alias("MeterName"),
