@@ -1,3 +1,4 @@
+LEFT JOIN interval data with meter_premise_macs_ami table to enrich meter readings with premise/account details (address, device code, meter program, install/removal timestamps) using metername match and time window validation.
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - FILE PROCESSING (OH OPCO)
 # ============================================================================
