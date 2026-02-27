@@ -63,31 +63,32 @@ from pyspark.sql.types import StructType, StructField, StringType, ArrayType, Lo
 #              gatewaycollectedtime,intervalsequencenumber,
 #              `interval`:array<struct<channel,rawvalue,value,uom,blockendvalue>>>>
 # ------------------------------------------------------------
+# Schema with DDL column names (all lowercase as per DDL Line 10)
 info_xml_schema = StructType([
-    StructField("_MeterName", LongType(), True),
+    StructField("_MeterName", StringType(), True),
     StructField("_UtilDeviceID", StringType(), True),
     StructField("_MacID", StringType(), True),
     
     StructField("IntervalReadData", StructType([
-        StructField("_IntervalLength", LongType(), True),
-        StructField("_StartTime", TimestampType(), True),
-        StructField("_EndTime", TimestampType(), True),
-        StructField("_NumberIntervals", LongType(), True),
+        StructField("_IntervalLength", StringType(), True),
+        StructField("_StartTime", StringType(), True),
+        StructField("_EndTime", StringType(), True),
+        StructField("_NumberIntervals", StringType(), True),
         
         StructField("Interval", ArrayType(
             StructType([
-                StructField("_EndTime", TimestampType(), True),
-                StructField("_BlockSequenceNumber", LongType(), True),
-                StructField("_GatewayCollectedTime", TimestampType(), True),
-                StructField("_IntervalSequenceNumber", LongType(), True),
+                StructField("_EndTime", StringType(), True),
+                StructField("_BlockSequenceNumber", StringType(), True),
+                StructField("_GatewayCollectedTime", StringType(), True),
+                StructField("_IntervalSequenceNumber", StringType(), True),
                 
                 StructField("Reading", ArrayType(
                     StructType([
-                        StructField("_Channel", LongType(), True),
-                        StructField("_RawValue", DoubleType(), True),
-                        StructField("_Value", DoubleType(), True),
+                        StructField("_Channel", StringType(), True),
+                        StructField("_RawValue", StringType(), True),
+                        StructField("_Value", StringType(), True),
                         StructField("_UOM", StringType(), True),
-                        StructField("_BlockEndValue", DoubleType(), True)
+                        StructField("_BlockEndValue", StringType(), True)
                     ]), True)
                 )
             ]), True)
@@ -95,9 +96,6 @@ info_xml_schema = StructType([
     ]), True)
 ])
 
-# ------------------------------------------------------------
-# Read XML
-# ------------------------------------------------------------
 xml_paths = "s3://aep-datalake-work-dev/util/intervals/nonvee/oh/src/202602/20260201_0431/*.xml.gz"
 part_date = "202602/20260201_0431"
 
@@ -110,61 +108,21 @@ interval_data_files_oh_src_df = (
     .option("nullValue", "")
     .option("mode", "PERMISSIVE")
     .schema(info_xml_schema)
-    .load(xml_paths)
+    .load(paths)
 )
 
-# ------------------------------------------------------------
-# Rename columns to match DDL (auth-pipeline style)
-# ------------------------------------------------------------
+# Rename to match DDL column names (Lines 3-10)
 interval_data_files_oh_src_df = (
     interval_data_files_oh_src_df
-    .withColumnRenamed("_MeterName", "metername")
-    .withColumnRenamed("_UtilDeviceID", "utildeviceid")
-    .withColumnRenamed("_MacID", "macid")
-    .withColumn("intervallength", f.col("IntervalReadData._IntervalLength"))
-    .withColumn("starttime", f.col("IntervalReadData._StartTime"))
-    .withColumn("endtime", f.col("IntervalReadData._EndTime"))
-    .withColumn("numberintervals", f.col("IntervalReadData._NumberIntervals"))
-    .withColumn("interval_reading", f.col("IntervalReadData.Interval"))
-    .withColumn("part_date", f.lit(part_date))
-    .drop("IntervalReadData")
+    .withColumnRenamed("_MeterName", "metername")              # DDL Line 3
+    .withColumnRenamed("_UtilDeviceID", "utildeviceid")        # DDL Line 4
+    .withColumnRenamed("_MacID", "macid")                      # DDL Line 5
+    .withColumnRenamed("IntervalReadData", "interval_reading") # DDL Line 10
+    .withColumn("part_date", f.lit(part_date))                 # DDL Line 12
 )
 
 interval_data_files_oh_src_df.printSchema()
 
-# Cell 5: Read XML Files
-# ============================================================================
-# Reference: source_interval_data_files.sh
-# Reference: stg_nonvee.interval_data_files_oh_src.ddl
-# Purpose: Read raw XML.gz files using spark-xml
-# ============================================================================
-
-df_raw = (
-    spark.read
-    .format("com.databricks.spark.xml")
-    .option("rowTag", "MeterData")
-    .option("rootTag", "MeterData")
-    .option("valueTag", "_text_content")
-    .schema(info_xml_schema)
-    .load(paths)
-)
-
-df_raw.printSchema()
-
-# Cell 6: Rename columns to match DDL naming
-# ============================================================================
-# Reference: stg_nonvee.interval_data_files_oh_src.ddl
-# Rename XML attributes to table column names
-# ============================================================================
-
-df_raw = (
-    df_raw
-    .withColumnRenamed("_MeterName", "MeterName")
-    .withColumnRenamed("_UtilDeviceID", "UtilDeviceID")
-    .withColumnRenamed("_MacID", "MacID")
-)
-
-df_raw.show(2, truncate=False)
 
 # Cell 7: Create df_uom_mapping (Reference Table)
 # ============================================================================
