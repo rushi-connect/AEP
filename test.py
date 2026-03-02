@@ -663,3 +663,220 @@ interval_data_files_oh_xfrm_df = (
 )
 
 interval_data_files_oh_xfrm_df.printSchema()
+
+
+# ============================================================
+# SCRIPT 6: MERGE INTO usage_nonvee.reading_ivl_nonvee_oh
+# ============================================================
+# Source: scripts/dml/usage_nonvee.reading_ivl_nonvee.dml
+# Input: interval_data_files_oh_xfrm_df
+# Target: iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh
+#
+# MERGE operation to upsert meter readings:
+# - MATCHED: Update existing records
+# - NOT MATCHED: Insert new records
+# - Keys: serialnumber, endtimeperiod, aep_channel_id, aep_raw_uom,
+#         aep_usage_dt, aep_meter_bucket
+# ============================================================
+
+
+# Step 1: Register DataFrame as temp view
+interval_data_files_oh_xfrm_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
+
+# Step 2: Get distinct usage dates for partition pruning
+usage_dates_df = interval_data_files_oh_xfrm_df.select("aep_usage_dt").distinct()
+usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
+usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
+
+# Step 3: Execute MERGE
+merge_sql = f"""
+MERGE INTO iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh AS t
+USING (
+    SELECT
+        serialnumber,
+        source,
+        aep_devicecode,
+        isvirtual_meter,
+        timezoneoffset,
+        aep_premise_nb,
+        aep_service_point,
+        aep_srvc_dlvry_id,
+        name_register,
+        isvirtual_register,
+        toutier,
+        toutiername,
+        aep_derived_uom,
+        aep_raw_uom,
+        aep_srvc_qlty_idntfr,
+        aep_channel_id,
+        aep_sec_per_intrvl,
+        aep_meter_alias,
+        aep_meter_program,
+        aep_billable_ind,
+        aep_usage_type,
+        aep_timezone_cd,
+        endtimeperiod,
+        starttimeperiod,
+        value,
+        aep_raw_value,
+        scalarfloat,
+        aep_data_quality_cd,
+        aep_data_validation,
+        aep_acct_cls_cd,
+        aep_acct_type_cd,
+        aep_mtr_pnt_nb,
+        aep_tarf_pnt_nb,
+        aep_comp_mtr_mltplr,
+        aep_endtime_utc,
+        aep_mtr_removal_ts,
+        aep_mtr_install_ts,
+        aep_city,
+        aep_zip,
+        aep_state,
+        to_timestamp(hdp_insert_dttm, 'yyyy-MM-dd HH:mm:ss.SSSSSS') as hdp_insert_dttm,
+        to_timestamp(hdp_insert_dttm, 'yyyy-MM-dd HH:mm:ss.SSSSSS') as hdp_update_dttm,
+        hdp_update_user,
+        authority,
+        aep_opco,
+        aep_usage_dt,
+        aep_meter_bucket
+    FROM interval_data_files_oh_xfrm_vw
+) AS s
+ON t.aep_usage_dt IN ({usage_dates_str})
+   AND t.aep_usage_dt = s.aep_usage_dt
+   AND t.aep_meter_bucket = s.aep_meter_bucket
+   AND t.serialnumber = s.serialnumber
+   AND t.aep_channel_id = s.aep_channel_id
+   AND t.aep_raw_uom = s.aep_raw_uom
+   AND t.endtimeperiod = s.endtimeperiod
+WHEN MATCHED THEN
+    UPDATE SET
+        t.aep_srvc_qlty_idntfr = s.aep_srvc_qlty_idntfr,
+        t.aep_channel_id = s.aep_channel_id,
+        t.aep_sec_per_intrvl = s.aep_sec_per_intrvl,
+        t.aep_meter_alias = s.aep_meter_alias,
+        t.aep_meter_program = s.aep_meter_program,
+        t.aep_usage_type = s.aep_usage_type,
+        t.aep_timezone_cd = s.aep_timezone_cd,
+        t.endtimeperiod = s.endtimeperiod,
+        t.starttimeperiod = s.starttimeperiod,
+        t.value = s.value,
+        t.aep_raw_value = s.aep_raw_value,
+        t.scalarfloat = s.scalarfloat,
+        t.aep_acct_cls_cd = s.aep_acct_cls_cd,
+        t.aep_acct_type_cd = s.aep_acct_type_cd,
+        t.aep_mtr_pnt_nb = s.aep_mtr_pnt_nb,
+        t.aep_comp_mtr_mltplr = s.aep_comp_mtr_mltplr,
+        t.aep_endtime_utc = s.aep_endtime_utc,
+        t.aep_mtr_removal_ts = s.aep_mtr_removal_ts,
+        t.aep_mtr_install_ts = s.aep_mtr_install_ts,
+        t.aep_city = s.aep_city,
+        t.aep_zip = s.aep_zip,
+        t.aep_state = s.aep_state,
+        t.hdp_update_user = 'info-update',
+        t.hdp_update_dttm = s.hdp_update_dttm,
+        t.authority = s.authority
+WHEN NOT MATCHED THEN
+    INSERT (
+        serialnumber,
+        source,
+        aep_devicecode,
+        isvirtual_meter,
+        timezoneoffset,
+        aep_premise_nb,
+        aep_service_point,
+        aep_srvc_dlvry_id,
+        name_register,
+        isvirtual_register,
+        toutier,
+        toutiername,
+        aep_derived_uom,
+        aep_raw_uom,
+        aep_srvc_qlty_idntfr,
+        aep_channel_id,
+        aep_sec_per_intrvl,
+        aep_meter_alias,
+        aep_meter_program,
+        aep_billable_ind,
+        aep_usage_type,
+        aep_timezone_cd,
+        endtimeperiod,
+        starttimeperiod,
+        value,
+        aep_raw_value,
+        scalarfloat,
+        aep_data_quality_cd,
+        aep_data_validation,
+        aep_acct_cls_cd,
+        aep_acct_type_cd,
+        aep_mtr_pnt_nb,
+        aep_tarf_pnt_nb,
+        aep_comp_mtr_mltplr,
+        aep_endtime_utc,
+        aep_mtr_removal_ts,
+        aep_mtr_install_ts,
+        aep_city,
+        aep_zip,
+        aep_state,
+        hdp_update_user,
+        hdp_insert_dttm,
+        hdp_update_dttm,
+        authority,
+        aep_opco,
+        aep_usage_dt,
+        aep_meter_bucket
+    ) VALUES (
+        s.serialnumber,
+        s.source,
+        s.aep_devicecode,
+        s.isvirtual_meter,
+        s.timezoneoffset,
+        s.aep_premise_nb,
+        s.aep_service_point,
+        s.aep_srvc_dlvry_id,
+        s.name_register,
+        s.isvirtual_register,
+        s.toutier,
+        s.toutiername,
+        s.aep_derived_uom,
+        s.aep_raw_uom,
+        s.aep_srvc_qlty_idntfr,
+        s.aep_channel_id,
+        s.aep_sec_per_intrvl,
+        s.aep_meter_alias,
+        s.aep_meter_program,
+        s.aep_billable_ind,
+        s.aep_usage_type,
+        s.aep_timezone_cd,
+        s.endtimeperiod,
+        s.starttimeperiod,
+        s.value,
+        s.aep_raw_value,
+        s.scalarfloat,
+        s.aep_data_quality_cd,
+        s.aep_data_validation,
+        s.aep_acct_cls_cd,
+        s.aep_acct_type_cd,
+        s.aep_mtr_pnt_nb,
+        s.aep_tarf_pnt_nb,
+        s.aep_comp_mtr_mltplr,
+        s.aep_endtime_utc,
+        s.aep_mtr_removal_ts,
+        s.aep_mtr_install_ts,
+        s.aep_city,
+        s.aep_zip,
+        s.aep_state,
+        'info-insert',
+        s.hdp_insert_dttm,
+        s.hdp_update_dttm,
+        s.authority,
+        s.aep_opco,
+        s.aep_usage_dt,
+        s.aep_meter_bucket
+    )
+"""
+
+# Execute MERGE
+spark.sql(merge_sql)
+
+print("MERGE INTO usage_nonvee.reading_ivl_nonvee_oh completed!")
