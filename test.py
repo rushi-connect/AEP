@@ -402,3 +402,99 @@ interval_data_files_oh_stg_df = (
 )
 
 interval_data_files_oh_stg_df.printSchema()
+
+# ============================================================
+# SCRIPT 4: default.iceberg_interval_data_files_oh_stg_vw
+# ============================================================
+# Source: scripts/ddl/stg_nonvee.interval_data_files_oh_stg_vw.ddl
+# Called by: xfrm_interval_data_files.sh (Line 190)
+# Input: interval_data_files_oh_stg_df (41 columns)
+# Output: interval_data_files_oh_stg_vw_df (43 columns)
+#
+# TRANSFORMATIONS:
+# - Line 4: source = "nonvee-hes"
+# - Line 6: isvirtual_meter = "N"
+# - Line 7: timezoneoffset = interval_epoch
+# - Lines 10-13: aep_service_point = concat(premise-tarf-mtr) if all not null
+# - Line 17: isvirtual_register = "N"
+# - Line 21: aep_channel_id = channel
+# - Line 22: aep_sec_per_intrvl = intervallength * 60
+# - Line 23: aep_meter_alias = NULL
+# - Line 25: aep_usage_type = "interval"
+# - Line 26: aep_timezone_cd = "US/Eastern"
+# - Line 27: endtimeperiod = endtime
+# - Line 28: starttimeperiod = starttime
+# - Lines 29-32: value = if value_mltplr_flg='Y' then value*bill_cnst else value
+# - Line 34: scalarfloat = bill_cnst
+# - Line 39: aep_comp_mtr_mltplr cast to double
+# - Line 40: aep_endtime_utc = unix_timestamp(endtime+interval_epoch)
+# - Lines 46-47: hdp_insert_dttm, hdp_update_dttm = current_timestamp
+# - Line 49: authority = substr(aep_premise_nb, 1, 2)
+# - Line 50: aep_usage_dt = substr(starttime, 1, 10)
+# - Line 51: data_type = "new"
+# ============================================================
+
+from pyspark.sql import functions as f
+
+interval_data_files_oh_stg_vw_df = (
+    interval_data_files_oh_stg_df
+    .select(
+        f.col("serialnumber"),
+        f.lit("nonvee-hes").alias("source"),
+        f.col("aep_devicecode"),
+        f.lit("N").alias("isvirtual_meter"),
+        f.col("interval_epoch").alias("timezoneoffset"),
+        f.col("aep_premise_nb"),
+        f.when(
+            f.col("aep_premise_nb").isNotNull() &
+            f.col("aep_tarf_pnt_nb").isNotNull() &
+            f.col("aep_mtr_pnt_nb").isNotNull(),
+            f.concat(f.col("aep_premise_nb"), f.lit("-"), f.col("aep_tarf_pnt_nb"), f.lit("-"), f.col("aep_mtr_pnt_nb"))
+        ).otherwise(f.lit(None)).alias("aep_service_point"),
+        f.col("aep_srvc_dlvry_id"),
+        f.col("name_register"),
+        f.lit("N").alias("isvirtual_register"),
+        f.col("aep_derived_uom"),
+        f.col("aep_raw_uom"),
+        f.col("aep_srvc_qlty_idntfr"),
+        f.col("channel").alias("aep_channel_id"),
+        (f.col("intervallength").cast("int") * 60).alias("aep_sec_per_intrvl"),
+        f.lit(None).cast("string").alias("aep_meter_alias"),
+        f.col("aep_meter_program"),
+        f.lit("interval").alias("aep_usage_type"),
+        f.lit("US/Eastern").alias("aep_timezone_cd"),
+        f.col("endtime").alias("endtimeperiod"),
+        f.col("starttime").alias("starttimeperiod"),
+        f.when(
+            f.col("value_mltplr_flg") == "Y",
+            f.col("value").cast("float") * f.col("bill_cnst").cast("float")
+        ).otherwise(f.col("value").cast("float")).alias("value"),
+        f.col("aep_raw_value"),
+        f.col("bill_cnst").alias("scalarfloat"),
+        f.col("aep_acct_cls_cd"),
+        f.col("aep_acct_type_cd"),
+        f.col("aep_mtr_pnt_nb"),
+        f.col("aep_tarf_pnt_nb"),
+        f.col("aep_comp_mtr_mltplr").cast("double").alias("aep_comp_mtr_mltplr"),
+        f.unix_timestamp(
+            f.concat(f.col("endtime"), f.col("interval_epoch")),
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+        ).cast("string").alias("aep_endtime_utc"),
+        f.col("aep_mtr_removal_ts"),
+        f.col("aep_mtr_install_ts"),
+        f.col("aep_city"),
+        f.col("aep_zip"),
+        f.col("aep_state"),
+        f.from_unixtime(f.unix_timestamp(f.current_timestamp())).alias("hdp_insert_dttm"),
+        f.from_unixtime(f.unix_timestamp(f.current_timestamp())).alias("hdp_update_dttm"),
+        f.col("hdp_update_user"),
+        f.substring(f.col("aep_premise_nb"), 1, 2).alias("authority"),
+        f.substring(f.col("starttime"), 1, 10).alias("aep_usage_dt"),
+        f.lit("new").alias("data_type"),
+        f.col("aep_opco"),
+        f.col("aep_meter_bucket")
+    )
+)
+
+interval_data_files_oh_stg_vw_df.printSchema()
+
