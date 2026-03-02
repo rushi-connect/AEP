@@ -410,7 +410,16 @@ interval_data_files_oh_stg_df.printSchema()
 # Called by: xfrm_interval_data_files.sh (Line 190)
 # Input: interval_data_files_oh_stg_df (41 columns)
 # Output: interval_data_files_oh_stg_vw_df (43 columns)
-#
+
+# Transform staged data by adding business logic:
+# - Add literals (source, isvirtual flags, timezone, usage_type)
+# - Compute aep_service_point from premise/tarf/mtr concatenation
+# - Calculate aep_sec_per_intrvl (interval length in seconds)
+# - Apply value multiplier logic (value * bill_cnst if flag='Y')
+# - Convert endtime to UTC unix timestamp
+# - Derive authority and aep_usage_dt from existing columns
+# - Add audit timestamps (hdp_insert_dttm, hdp_update_dttm)
+
 # TRANSFORMATIONS:
 # - Line 4: source = "nonvee-hes"
 # - Line 6: isvirtual_meter = "N"
@@ -498,3 +507,159 @@ interval_data_files_oh_stg_vw_df = (
 
 interval_data_files_oh_stg_vw_df.printSchema()
 
+# ============================================================
+# SCRIPT 5: iceberg_catalog.stg_nonvee.interval_data_files_oh_xfrm
+# ============================================================
+# Source: scripts/xfrm_interval_data_files.sh (Lines 140-191)
+#         scripts/ddl/stg_nonvee.interval_data_files_oh_xfrm.ddl
+# Input: interval_data_files_oh_stg_vw_df (43 columns)
+# Output: interval_data_files_oh_xfrm_df (50 columns)
+
+# Prepare data for Iceberg xfrm table by:
+# - Adding 5 NULL columns (toutier, toutiername, aep_billable_ind, aep_data_quality_cd, aep_data_validation)
+# - Type casting to match DDL (double, float, timestamp)
+# - Partition columns: data_type, aep_opco, aep_usage_dt, aep_meter_bucket
+
+from pyspark.sql.functions import col, lit
+
+interval_data_files_oh_xfrm_df = (
+    interval_data_files_oh_stg_vw_df
+    .select(
+        col("serialnumber"),
+        col("source"),
+        col("aep_devicecode"),
+        col("isvirtual_meter"),
+        col("timezoneoffset"),
+        col("aep_premise_nb"),
+        col("aep_service_point"),
+        col("aep_mtr_install_ts"),
+        col("aep_mtr_removal_ts"),
+        col("aep_srvc_dlvry_id"),
+        col("aep_comp_mtr_mltplr").cast("double"),
+        col("name_register"),
+        col("isvirtual_register"),
+        lit(None).cast("string").alias("toutier"),
+        lit(None).cast("string").alias("toutiername"),
+        col("aep_srvc_qlty_idntfr"),
+        col("aep_channel_id"),
+        col("aep_raw_uom"),
+        col("aep_sec_per_intrvl").cast("double"),
+        col("aep_meter_alias"),
+        col("aep_meter_program"),
+        lit(None).cast("string").alias("aep_billable_ind"),
+        col("aep_usage_type"),
+        col("aep_timezone_cd"),
+        col("endtimeperiod"),
+        col("starttimeperiod"),
+        col("value").cast("float"),
+        col("aep_raw_value").cast("float"),
+        col("scalarfloat").cast("float"),
+        lit(None).cast("string").alias("aep_data_quality_cd"),
+        lit(None).cast("string").alias("aep_data_validation"),
+        col("aep_acct_cls_cd"),
+        col("aep_acct_type_cd"),
+        col("aep_mtr_pnt_nb"),
+        col("aep_tarf_pnt_nb"),
+        col("aep_endtime_utc"),
+        col("aep_city"),
+        col("aep_zip"),
+        col("aep_state"),
+        col("hdp_update_user"),
+        col("hdp_insert_dttm").cast("timestamp"),
+        col("hdp_update_dttm").cast("timestamp"),
+        col("authority"),
+        col("aep_derived_uom"),
+        col("data_type"),
+        col("aep_opco"),
+        col("aep_usage_dt"),
+        col("aep_meter_bucket")
+    )
+)
+
+interval_data_files_oh_xfrm_df.printSchema()
+
+-------Combined both Queries--------------
+# ============================================================
+# SCRIPT 5: iceberg_catalog.stg_nonvee.interval_data_files_oh_xfrm
+# ============================================================
+# Source: scripts/xfrm_interval_data_files.sh (Lines 140-191)
+#         scripts/ddl/stg_nonvee.interval_data_files_oh_xfrm.ddl
+#         scripts/ddl/stg_nonvee.interval_data_files_oh_xfrm_vw.ddl
+# Input: interval_data_files_oh_stg_vw_df (43 columns)
+# Output: interval_data_files_oh_xfrm_df (50 columns, deduplicated)
+#
+# Prepare data for Iceberg xfrm table by:
+# - Combined both queries like (stg_nonvee.interval_data_files_oh_xfrm.ddl+interval_data_files_oh_xfrm_vw.ddl)
+# - Adding 5 NULL columns (toutier, toutiername, aep_billable_ind, aep_data_quality_cd, aep_data_validation)
+# - Casting to match DDL types (double, float, timestamp)
+# - Deduplication using ROW_NUMBER() partitioned by (serialnumber, endtimeperiod, aep_channel_id, aep_raw_uom)
+# ============================================================
+
+from pyspark.sql.functions import col, lit, row_number
+from pyspark.sql.window import Window
+
+dedup_window = Window.partitionBy(
+    "serialnumber",
+    "endtimeperiod",
+    "aep_channel_id",
+    "aep_raw_uom"
+).orderBy(col("hdp_insert_dttm").desc())
+
+interval_data_files_oh_xfrm_df = (
+    interval_data_files_oh_stg_vw_df
+    .select(
+        col("serialnumber"),
+        col("source"),
+        col("aep_devicecode"),
+        col("isvirtual_meter"),
+        col("timezoneoffset"),
+        col("aep_premise_nb"),
+        col("aep_service_point"),
+        col("aep_mtr_install_ts"),
+        col("aep_mtr_removal_ts"),
+        col("aep_srvc_dlvry_id"),
+        col("aep_comp_mtr_mltplr").cast("double"),
+        col("name_register"),
+        col("isvirtual_register"),
+        lit(None).cast("string").alias("toutier"),
+        lit(None).cast("string").alias("toutiername"),
+        col("aep_srvc_qlty_idntfr"),
+        col("aep_channel_id"),
+        col("aep_raw_uom"),
+        col("aep_sec_per_intrvl").cast("double"),
+        col("aep_meter_alias"),
+        col("aep_meter_program"),
+        lit(None).cast("string").alias("aep_billable_ind"),
+        col("aep_usage_type"),
+        col("aep_timezone_cd"),
+        col("endtimeperiod"),
+        col("starttimeperiod"),
+        col("value").cast("float"),
+        col("aep_raw_value").cast("float"),
+        col("scalarfloat").cast("float"),
+        lit(None).cast("string").alias("aep_data_quality_cd"),
+        lit(None).cast("string").alias("aep_data_validation"),
+        col("aep_acct_cls_cd"),
+        col("aep_acct_type_cd"),
+        col("aep_mtr_pnt_nb"),
+        col("aep_tarf_pnt_nb"),
+        col("aep_endtime_utc"),
+        col("aep_city"),
+        col("aep_zip"),
+        col("aep_state"),
+        col("hdp_update_user"),
+        col("hdp_insert_dttm").cast("timestamp"),
+        col("hdp_update_dttm").cast("timestamp"),
+        col("authority"),
+        col("aep_derived_uom"),
+        col("data_type"),
+        col("aep_opco"),
+        col("aep_usage_dt"),
+        col("aep_meter_bucket")
+    )
+    .withColumn("row_num", row_number().over(dedup_window))
+    .filter(col("row_num") == 1)
+    .drop("row_num")
+)
+
+interval_data_files_oh_xfrm_df.printSchema()
