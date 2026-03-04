@@ -13,7 +13,12 @@ LEFT JOIN interval data with meter_premise_macs_ami table to enrich meter readin
 %%configure -f
 {
     "conf": {
-        "spark.jars.packages": "com.databricks:spark-xml_2.12:0.18.0"
+        "spark.jars.packages": "com.databricks:spark-xml_2.12:0.18.0",
+        "spark.sql.legacy.timeParserPolicy": "LEGACY",
+        "spark.sql.catalog.iceberg_catalog": "org.apache.iceberg.spark.SparkCatalog",
+        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        "spark.sql.catalog.iceberg_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+        "spark.sql.catalog.iceberg_catalog.warehouse": "s3://aep-datalake-consume-dev/iceberg_catalog"
     }
 }
 
