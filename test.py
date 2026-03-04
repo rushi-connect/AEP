@@ -686,12 +686,28 @@ interval_data_files_oh_xfrm_df.printSchema()
 
 
 # Step 1: Register DataFrame as temp view
-interval_data_files_oh_xfrm_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
+##interval_data_files_oh_xfrm_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
 
-# Step 2: Get distinct usage dates for partition pruning
-usage_dates_df = interval_data_files_oh_xfrm_df.select("aep_usage_dt").distinct()
+# Step 1: Set checkpoint directory
+spark.sparkContext.setCheckpointDir("s3://aep-datalake-work-dev/temp/checkpoint/")
+
+# Step 2: Materialize the DataFrame (saves row_number result to disk)
+materialized_df = interval_data_files_oh_xfrm_df.checkpoint()
+
+# Step 3: Create temp view from materialized data
+materialized_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
+
+# Step 4: Get distinct usage dates for partition pruning
+usage_dates_df = materialized_df.select("aep_usage_dt").distinct()
 usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
 usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
+
+### Step 2: Get distinct usage dates for partition pruning
+#usage_dates_df = interval_data_files_oh_xfrm_df.select("aep_usage_dt").distinct()
+#usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
+#usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
+
+
 
 # Step 3: Execute MERGE
 merge_sql = f"""
@@ -884,4 +900,3 @@ WHEN NOT MATCHED THEN
 # Execute MERGE
 spark.sql(merge_sql)
 
-print("MERGE INTO usage_nonvee.reading_ivl_nonvee_oh completed!")
