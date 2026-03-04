@@ -1,3 +1,19 @@
+
+An error was encountered:
+[REQUIRES_SINGLE_PART_NAMESPACE] spark_catalog requires a single-part namespace, but got `iceberg_catalog`.`usage_nonvee`.
+Traceback (most recent call last):
+  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0001/container_1772620433903_0001_01_000001/pyspark.zip/pyspark/sql/session.py", line 1631, in sql
+    return DataFrame(self._jsparkSession.sql(sqlQuery, litArgs), self)
+  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0001/container_1772620433903_0001_01_000001/py4j-0.10.9.7-src.zip/py4j/java_gateway.py", line 1322, in __call__
+    return_value = get_return_value(
+  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0001/container_1772620433903_0001_01_000001/pyspark.zip/pyspark/errors/exceptions/captured.py", line 185, in deco
+    raise converted from None
+pyspark.errors.exceptions.captured.AnalysisException: [REQUIRES_SINGLE_PART_NAMESPACE] spark_catalog requires a single-part namespace, but got `iceberg_catalog`.`usage_nonvee`.
+
+
+
+
+
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - COMPLETE PYSPARK IMPLEMENTATION
 # ============================================================================
