@@ -1,174 +1,425 @@
-An error was encountered:
-[INVALID_NON_DETERMINISTIC_EXPRESSIONS] The operator expects a deterministic expression, but the actual expression is "((((aep_usage_dt IN (2026-02-19)) AND (aep_usage_dt = aep_usage_dt)) AND ((aep_meter_bucket = aep_meter_bucket) AND (serialnumber = serialnumber))) AND (((aep_channel_id = aep_channel_id) AND (aep_raw_uom = aep_raw_uom)) AND (endtimeperiod = endtimeperiod)))", "exists(aep_usage_dt, aep_usage_dt, aep_meter_bucket, serialnumber, aep_channel_id, aep_raw_uom, endtimeperiod)".; line 2 pos 0;
-ReplaceData
-:  +- Filter (((outer(aep_usage_dt#935) IN (2026-02-19) AND (outer(aep_usage_dt#935) = aep_usage_dt#624)) AND ((outer(aep_meter_bucket#936) = aep_meter_bucket#563) AND (outer(serialnumber#890) = serialnumber#541))) AND (((outer(aep_channel_id#906) = aep_channel_id#610) AND (outer(aep_raw_uom#907) = aep_raw_uom#547)) AND (outer(endtimeperiod#914) = endtimeperiod#615)))
-:     +- SubqueryAlias s
-:        +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 23 more fields]
-:           +- SubqueryAlias interval_data_files_oh_xfrm_vw
-:              +- View (`interval_data_files_oh_xfrm_vw`, [serialnumber#541,source#605,aep_devicecode#553,isvirtual_meter#606,timezoneoffset#607,aep_premise_nb#550,aep_service_point#608,aep_mtr_install_ts#560,aep_mtr_removal_ts#559,aep_srvc_dlvry_id#555,aep_comp_mtr_mltplr#674,name_register#204,isvirtual_register#609,toutier#669,toutiername#670,aep_srvc_qlty_idntfr#549,aep_channel_id#610,aep_raw_uom#547,aep_sec_per_intrvl#675,aep_meter_alias#612,aep_meter_program#554,aep_billable_ind#671,aep_usage_type#613,aep_timezone_cd#614,endtimeperiod#615,starttimeperiod#616,value#676,aep_raw_value#677,scalarfloat#678,aep_data_quality_cd#672,aep_data_validation#673,aep_acct_cls_cd#551,aep_acct_type_cd#552,aep_mtr_pnt_nb#556,aep_tarf_pnt_nb#557,aep_endtime_utc#620,aep_city#404,aep_zip#561,aep_state#406,hdp_update_user#562,hdp_insert_dttm#679,hdp_update_dttm#680,authority#623,aep_derived_uom#548,data_type#625,aep_opco#540,aep_usage_dt#624,aep_meter_bucket#563])
-:                 +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                    +- Filter (row_num#730 = 1)
-:                       +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 25 more fields]
-:                          +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 26 more fields]
-:                             +- Window [row_number() windowspecdefinition(serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547, hdp_insert_dttm#679 DESC NULLS LAST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS row_num#730], [serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547], [hdp_insert_dttm#679 DESC NULLS LAST]
-:                                +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                                   +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, cast(aep_comp_mtr_mltplr#619 as double) AS aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, cast(null as string) AS toutier#669, cast(null as string) AS toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, cast(aep_sec_per_intrvl#611 as double) AS aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, cast(null as string) AS aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                                      +- Project [serialnumber#541, nonvee-hes AS source#605, aep_devicecode#553, N AS isvirtual_meter#606, interval_epoch#119 AS timezoneoffset#607, aep_premise_nb#550, CASE WHEN ((isnotnull(aep_premise_nb#550) AND isnotnull(aep_tarf_pnt_nb#557)) AND isnotnull(aep_mtr_pnt_nb#556)) THEN concat(aep_premise_nb#550, -, aep_tarf_pnt_nb#557, -, aep_mtr_pnt_nb#556) ELSE cast(null as string) END AS aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, N AS isvirtual_register#609, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, channel#120 AS aep_channel_id#610, (cast(intervallength#544 as int) * 60) AS aep_sec_per_intrvl#611, cast(null as string) AS aep_meter_alias#612, aep_meter_program#554, interval AS aep_usage_type#613, US/Eastern AS aep_timezone_cd#614, endtime#201 AS endtimeperiod#615, starttime#200 AS starttimeperiod#616, CASE WHEN (value_mltplr_flg#40 = Y) THEN (cast(value#122 as float) * cast(bill_cnst#247 as float)) ELSE cast(value#122 as float) END AS value#617, aep_raw_value#546, bill_cnst#247 AS scalarfloat#618, ... 19 more fields]
-:                                         +- Project [filename#48, oh AS aep_opco#540, MeterName#199 AS serialnumber#541, UtilDeviceID#66 AS utildeviceid#542, MacID#67 AS macid#543, IntervalLength#68 AS intervallength#544, blockstarttime#69, blockendtime#70, NumberIntervals#71 AS numberintervals#545, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, value#122 AS aep_raw_value#546, value#122, uom#202 AS aep_raw_uom#547, upper(aep_uom#203) AS aep_derived_uom#548, name_register#204, aep_sqi#205 AS aep_srvc_qlty_idntfr#549, prem_nb#229 AS aep_premise_nb#550, bill_cnst#247, ... 17 more fields]
-:                                            +- Join LeftOuter, (((MeterName#199 = mfr_devc_ser_nbr#233) AND ((unix_endtime#427L >= unix_mtr_inst_ts#400L) AND (unix_endtime#427L <= unix_mtr_rmvl_ts#401L))) AND ((unix_endtime#427L >= unix_acct_turn_on_dt#402L) AND (unix_endtime#427L <= unix_acct_turn_off_dt#403L)))
-:                                               :- Project [filename#48, MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, uom#202, part_date#28, aep_uom#203, name_register#204, aep_sqi#205, value_mltplr_flg#40, unix_timestamp(endtime#201, yyyy-MM-dd'T'HH:mm:ssXXX, Some(America/New_York), false) AS unix_endtime#427L]
-:                                               :  +- Project [filename#48, trim(MeterName#65, None) AS MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, concat(starttime#117, interval_epoch#119) AS starttime#200, concat(endtime#118, interval_epoch#119) AS endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, lower(trim(uom#123, None)) AS uom#202, part_date#28, coalesce(aep_derived_uom#36, UNK) AS aep_uom#203, CASE WHEN isnotnull(name_register#38) THEN regexp_replace(name_register#38, mtr_ivl_len, IntervalLength#68, 1) ELSE UNK END AS name_register#204, coalesce(aep_srvc_qlty_idntfr#39, UNK) AS aep_sqi#205, value_mltplr_flg#40]
-:                                               :     +- Join LeftOuter, (channel#120 = aep_channel_id#35)
-:                                               :        :- Filter (((isnotnull(channel#120) AND isnotnull(rawvalue#121)) AND isnotnull(value#122)) AND isnotnull(uom#123))
-:                                               :        :  +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, from_unixtime((unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false) - cast((cast(IntervalLength#68 as int) * 60) as bigint)), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS starttime#117, from_unixtime(unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS endtime#118, substring(int_endtime#72, -6, 6) AS interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, exp_reading#101._Channel AS channel#120, exp_reading#101._RawValue AS rawvalue#121, exp_reading#101._Value AS value#122, exp_reading#101._UOM AS uom#123, part_date#28]
-:                                               :        :     +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, part_date#28, int_endtime#72, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, int_reading#76, exp_reading#101]
-:                                               :        :        +- Generate explode(int_reading#76), false, [exp_reading#101]
-:                                               :        :           +- Filter (cast(date_format(to_timestamp(substring(blockstarttime#69, 1, 10), Some(yyyy-MM-dd), TimestampType, Some(America/New_York), false), yyyyMMdd, Some(America/New_York)) as int) >= 20150301)
-:                                               :        :              +- Project [filename#48, metername#8 AS MeterName#65, utildeviceid#13 AS UtilDeviceID#66, macid#18 AS MacID#67, interval_reading#23._IntervalLength AS IntervalLength#68, interval_reading#23._StartTime AS blockstarttime#69, interval_reading#23._EndTime AS blockendtime#70, interval_reading#23._NumberIntervals AS NumberIntervals#71, part_date#28, exp_interval#57._EndTime AS int_endtime#72, exp_interval#57._GatewayCollectedTime AS int_gatewaycollectedtime#73, exp_interval#57._BlockSequenceNumber AS int_blocksequencenumber#74, exp_interval#57._IntervalSequenceNumber AS int_intervalsequencenumber#75, exp_interval#57.Reading AS int_reading#76]
-:                                               :        :                 +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, filename#48, exp_interval#57]
-:                                               :        :                    +- Generate explode(interval_reading#23.Interval), false, [exp_interval#57]
-:                                               :        :                       +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, input_file_name() AS filename#48]
-:                                               :        :                          +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, 20260219_2131 AS part_date#28]
-:                                               :        :                             +- Project [metername#8, utildeviceid#13, macid#18, IntervalReadData#3 AS interval_reading#23]
-:                                               :        :                                +- Project [metername#8, utildeviceid#13, _MacID#2 AS macid#18, IntervalReadData#3]
-:                                               :        :                                   +- Project [metername#8, _UtilDeviceID#1 AS utildeviceid#13, _MacID#2, IntervalReadData#3]
-:                                               :        :                                      +- Project [_MeterName#0 AS metername#8, _UtilDeviceID#1, _MacID#2, IntervalReadData#3]
-:                                               :        :                                         +- Relation [_MeterName#0,_UtilDeviceID#1,_MacID#2,IntervalReadData#3] XmlRelation(com.databricks.spark.xml.DefaultSource$$Lambda$2709/0x0000000801fcf070@7a4bd827,Some(s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz),Map(valuetag -> _VALUE, path -> s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz, attributeprefix -> _, nullvalue -> , mode -> PERMISSIVE, rowtag -> MeterData),StructType(StructField(_MeterName,StringType,true),StructField(_UtilDeviceID,StringType,true),StructField(_MacID,StringType,true),StructField(IntervalReadData,StructType(StructField(_IntervalLength,StringType,true),StructField(_StartTime,StringType,true),StructField(_EndTime,StringType,true),StructField(_NumberIntervals,StringType,true),StructField(Interval,ArrayType(StructType(StructField(_EndTime,StringType,true),StructField(_BlockSequenceNumber,StringType,true),StructField(_GatewayCollectedTime,StringType,true),StructField(_IntervalSequenceNumber,StringType,true),StructField(Reading,ArrayType(StructType(StructField(_Channel,StringType,true),StructField(_RawValue,StringType,true),StructField(_Value,StringType,true),StructField(_UOM,StringType,true),StructField(_BlockEndValue,StringType,true)),true),true)),true),true)),true)))
-:                                               :        +- LogicalRDD [aep_opco#34, aep_channel_id#35, aep_derived_uom#36, aep_raw_uom#37, name_register#38, aep_srvc_qlty_idntfr#39, value_mltplr_flg#40], false
-:                                               +- Project [prem_nb#229, bill_cnst#247, acct_clas_cd#277, acct_type_cd#272, devc_cd#235, pgm_id_nm#238, concat(coalesce(tx_mand_data#280, ), coalesce(doe_nb#281, ), coalesce(serv_deliv_id#282, )) AS sd#398, mfr_devc_ser_nbr#233, mtr_pnt_nb#242, tarf_pnt_nb#243, cast(null as string) AS cmsg_mtr_mult_nb#399, mtr_inst_ts#236, mtr_rmvl_ts#237, unix_timestamp(mtr_inst_ts#236, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) AS unix_mtr_inst_ts#400L, CASE WHEN (mtr_rmvl_ts#237 = 9999-01-01) THEN unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd, Some(America/New_York), false) ELSE unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) END AS unix_mtr_rmvl_ts#401L, unix_timestamp(acct_turn_on_dt#231, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_on_dt#402L, unix_timestamp(acct_turn_off_dt#232, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_off_dt#403L, serv_city_ad#269 AS aep_city#404, serv_zip_ad#270 AS aep_zip#405, state_cd#248 AS aep_state#406]
-:                                                  +- Filter co_cd_ownr#284 IN (10,07)
-:                                                     +- SubqueryAlias spark_catalog.stg_nonvee.meter_premise_macs_ami
-:                                                        +- Relation spark_catalog.stg_nonvee.meter_premise_macs_ami[prem_nb#229,bill_acct_nb#230,acct_turn_on_dt#231,acct_turn_off_dt#232,mfr_devc_ser_nbr#233,mfr_cd#234,devc_cd#235,mtr_inst_ts#236,mtr_rmvl_ts#237,pgm_id_nm#238,inst_devc_type_cd#239,mtr_kind_cd#240,mtr_use_cd#241,mtr_pnt_nb#242,tarf_pnt_nb#243,tod_mtr_fl#244,mtr_stat_cd#245,dial_cnst#246,bill_cnst#247,state_cd#248,dvsn_cd#249,jrsd_cd#250,area_cd#251,phys_inst_dt#252,... 32 more fields] orc
-+- MergeRows[serialnumber#948, source#949, aep_devicecode#950, isvirtual_meter#951, timezoneoffset#952, aep_premise_nb#953, aep_service_point#954, aep_mtr_install_ts#955, aep_mtr_removal_ts#956, aep_srvc_dlvry_id#957, aep_comp_mtr_mltplr#958, name_register#959, isvirtual_register#960, toutier#961, toutiername#962, aep_srvc_qlty_idntfr#963, aep_channel_id#964, aep_raw_uom#965, aep_sec_per_intrvl#966, aep_meter_alias#967, aep_meter_program#968, aep_billable_ind#969, aep_usage_type#970, aep_timezone_cd#971, ... 24 more fields]
-   +- Join FullOuter, (((aep_usage_dt#935 IN (2026-02-19) AND (aep_usage_dt#935 = aep_usage_dt#624)) AND ((aep_meter_bucket#936 = aep_meter_bucket#563) AND (serialnumber#890 = serialnumber#541))) AND (((aep_channel_id#906 = aep_channel_id#610) AND (aep_raw_uom#907 = aep_raw_uom#547)) AND (endtimeperiod#914 = endtimeperiod#615))), leftHint=(strategy=no_broadcast_and_replication)
-      :- Project [serialnumber#890, source#891, aep_devicecode#892, isvirtual_meter#893, timezoneoffset#894, aep_premise_nb#895, aep_service_point#896, aep_mtr_install_ts#897, aep_mtr_removal_ts#898, aep_srvc_dlvry_id#899, aep_comp_mtr_mltplr#900, name_register#901, isvirtual_register#902, toutier#903, toutiername#904, aep_srvc_qlty_idntfr#905, aep_channel_id#906, aep_raw_uom#907, aep_sec_per_intrvl#908, aep_meter_alias#909, aep_meter_program#910, aep_billable_ind#911, aep_usage_type#912, aep_timezone_cd#913, ... 26 more fields]
-      :  +- RelationV2[serialnumber#890, source#891, aep_devicecode#892, isvirtual_meter#893, timezoneoffset#894, aep_premise_nb#895, aep_service_point#896, aep_mtr_install_ts#897, aep_mtr_removal_ts#898, aep_srvc_dlvry_id#899, aep_comp_mtr_mltplr#900, name_register#901, isvirtual_register#902, toutier#903, toutiername#904, aep_srvc_qlty_idntfr#905, aep_channel_id#906, aep_raw_uom#907, aep_sec_per_intrvl#908, aep_meter_alias#909, aep_meter_program#910, aep_billable_ind#911, aep_usage_type#912, aep_timezone_cd#913, ... 24 more fields] iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh
-      +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 24 more fields]
-         +- SubqueryAlias s
-            +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 23 more fields]
-               +- SubqueryAlias interval_data_files_oh_xfrm_vw
-                  +- View (`interval_data_files_oh_xfrm_vw`, [serialnumber#541,source#605,aep_devicecode#553,isvirtual_meter#606,timezoneoffset#607,aep_premise_nb#550,aep_service_point#608,aep_mtr_install_ts#560,aep_mtr_removal_ts#559,aep_srvc_dlvry_id#555,aep_comp_mtr_mltplr#674,name_register#204,isvirtual_register#609,toutier#669,toutiername#670,aep_srvc_qlty_idntfr#549,aep_channel_id#610,aep_raw_uom#547,aep_sec_per_intrvl#675,aep_meter_alias#612,aep_meter_program#554,aep_billable_ind#671,aep_usage_type#613,aep_timezone_cd#614,endtimeperiod#615,starttimeperiod#616,value#676,aep_raw_value#677,scalarfloat#678,aep_data_quality_cd#672,aep_data_validation#673,aep_acct_cls_cd#551,aep_acct_type_cd#552,aep_mtr_pnt_nb#556,aep_tarf_pnt_nb#557,aep_endtime_utc#620,aep_city#404,aep_zip#561,aep_state#406,hdp_update_user#562,hdp_insert_dttm#679,hdp_update_dttm#680,authority#623,aep_derived_uom#548,data_type#625,aep_opco#540,aep_usage_dt#624,aep_meter_bucket#563])
-                     +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                        +- Filter (row_num#730 = 1)
-                           +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 25 more fields]
-                              +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 26 more fields]
-                                 +- Window [row_number() windowspecdefinition(serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547, hdp_insert_dttm#679 DESC NULLS LAST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS row_num#730], [serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547], [hdp_insert_dttm#679 DESC NULLS LAST]
-                                    +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                                       +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, cast(aep_comp_mtr_mltplr#619 as double) AS aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, cast(null as string) AS toutier#669, cast(null as string) AS toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, cast(aep_sec_per_intrvl#611 as double) AS aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, cast(null as string) AS aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                                          +- Project [serialnumber#541, nonvee-hes AS source#605, aep_devicecode#553, N AS isvirtual_meter#606, interval_epoch#119 AS timezoneoffset#607, aep_premise_nb#550, CASE WHEN ((isnotnull(aep_premise_nb#550) AND isnotnull(aep_tarf_pnt_nb#557)) AND isnotnull(aep_mtr_pnt_nb#556)) THEN concat(aep_premise_nb#550, -, aep_tarf_pnt_nb#557, -, aep_mtr_pnt_nb#556) ELSE cast(null as string) END AS aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, N AS isvirtual_register#609, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, channel#120 AS aep_channel_id#610, (cast(intervallength#544 as int) * 60) AS aep_sec_per_intrvl#611, cast(null as string) AS aep_meter_alias#612, aep_meter_program#554, interval AS aep_usage_type#613, US/Eastern AS aep_timezone_cd#614, endtime#201 AS endtimeperiod#615, starttime#200 AS starttimeperiod#616, CASE WHEN (value_mltplr_flg#40 = Y) THEN (cast(value#122 as float) * cast(bill_cnst#247 as float)) ELSE cast(value#122 as float) END AS value#617, aep_raw_value#546, bill_cnst#247 AS scalarfloat#618, ... 19 more fields]
-                                             +- Project [filename#48, oh AS aep_opco#540, MeterName#199 AS serialnumber#541, UtilDeviceID#66 AS utildeviceid#542, MacID#67 AS macid#543, IntervalLength#68 AS intervallength#544, blockstarttime#69, blockendtime#70, NumberIntervals#71 AS numberintervals#545, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, value#122 AS aep_raw_value#546, value#122, uom#202 AS aep_raw_uom#547, upper(aep_uom#203) AS aep_derived_uom#548, name_register#204, aep_sqi#205 AS aep_srvc_qlty_idntfr#549, prem_nb#229 AS aep_premise_nb#550, bill_cnst#247, ... 17 more fields]
-                                                +- Join LeftOuter, (((MeterName#199 = mfr_devc_ser_nbr#233) AND ((unix_endtime#427L >= unix_mtr_inst_ts#400L) AND (unix_endtime#427L <= unix_mtr_rmvl_ts#401L))) AND ((unix_endtime#427L >= unix_acct_turn_on_dt#402L) AND (unix_endtime#427L <= unix_acct_turn_off_dt#403L)))
-                                                   :- Project [filename#48, MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, uom#202, part_date#28, aep_uom#203, name_register#204, aep_sqi#205, value_mltplr_flg#40, unix_timestamp(endtime#201, yyyy-MM-dd'T'HH:mm:ssXXX, Some(America/New_York), false) AS unix_endtime#427L]
-                                                   :  +- Project [filename#48, trim(MeterName#65, None) AS MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, concat(starttime#117, interval_epoch#119) AS starttime#200, concat(endtime#118, interval_epoch#119) AS endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, lower(trim(uom#123, None)) AS uom#202, part_date#28, coalesce(aep_derived_uom#36, UNK) AS aep_uom#203, CASE WHEN isnotnull(name_register#38) THEN regexp_replace(name_register#38, mtr_ivl_len, IntervalLength#68, 1) ELSE UNK END AS name_register#204, coalesce(aep_srvc_qlty_idntfr#39, UNK) AS aep_sqi#205, value_mltplr_flg#40]
-                                                   :     +- Join LeftOuter, (channel#120 = aep_channel_id#35)
-                                                   :        :- Filter (((isnotnull(channel#120) AND isnotnull(rawvalue#121)) AND isnotnull(value#122)) AND isnotnull(uom#123))
-                                                   :        :  +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, from_unixtime((unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false) - cast((cast(IntervalLength#68 as int) * 60) as bigint)), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS starttime#117, from_unixtime(unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS endtime#118, substring(int_endtime#72, -6, 6) AS interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, exp_reading#101._Channel AS channel#120, exp_reading#101._RawValue AS rawvalue#121, exp_reading#101._Value AS value#122, exp_reading#101._UOM AS uom#123, part_date#28]
-                                                   :        :     +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, part_date#28, int_endtime#72, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, int_reading#76, exp_reading#101]
-                                                   :        :        +- Generate explode(int_reading#76), false, [exp_reading#101]
-                                                   :        :           +- Filter (cast(date_format(to_timestamp(substring(blockstarttime#69, 1, 10), Some(yyyy-MM-dd), TimestampType, Some(America/New_York), false), yyyyMMdd, Some(America/New_York)) as int) >= 20150301)
-                                                   :        :              +- Project [filename#48, metername#8 AS MeterName#65, utildeviceid#13 AS UtilDeviceID#66, macid#18 AS MacID#67, interval_reading#23._IntervalLength AS IntervalLength#68, interval_reading#23._StartTime AS blockstarttime#69, interval_reading#23._EndTime AS blockendtime#70, interval_reading#23._NumberIntervals AS NumberIntervals#71, part_date#28, exp_interval#57._EndTime AS int_endtime#72, exp_interval#57._GatewayCollectedTime AS int_gatewaycollectedtime#73, exp_interval#57._BlockSequenceNumber AS int_blocksequencenumber#74, exp_interval#57._IntervalSequenceNumber AS int_intervalsequencenumber#75, exp_interval#57.Reading AS int_reading#76]
-                                                   :        :                 +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, filename#48, exp_interval#57]
-                                                   :        :                    +- Generate explode(interval_reading#23.Interval), false, [exp_interval#57]
-                                                   :        :                       +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, input_file_name() AS filename#48]
-                                                   :        :                          +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, 20260219_2131 AS part_date#28]
-                                                   :        :                             +- Project [metername#8, utildeviceid#13, macid#18, IntervalReadData#3 AS interval_reading#23]
-                                                   :        :                                +- Project [metername#8, utildeviceid#13, _MacID#2 AS macid#18, IntervalReadData#3]
-                                                   :        :                                   +- Project [metername#8, _UtilDeviceID#1 AS utildeviceid#13, _MacID#2, IntervalReadData#3]
-                                                   :        :                                      +- Project [_MeterName#0 AS metername#8, _UtilDeviceID#1, _MacID#2, IntervalReadData#3]
-                                                   :        :                                         +- Relation [_MeterName#0,_UtilDeviceID#1,_MacID#2,IntervalReadData#3] XmlRelation(com.databricks.spark.xml.DefaultSource$$Lambda$2709/0x0000000801fcf070@7a4bd827,Some(s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz),Map(valuetag -> _VALUE, path -> s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz, attributeprefix -> _, nullvalue -> , mode -> PERMISSIVE, rowtag -> MeterData),StructType(StructField(_MeterName,StringType,true),StructField(_UtilDeviceID,StringType,true),StructField(_MacID,StringType,true),StructField(IntervalReadData,StructType(StructField(_IntervalLength,StringType,true),StructField(_StartTime,StringType,true),StructField(_EndTime,StringType,true),StructField(_NumberIntervals,StringType,true),StructField(Interval,ArrayType(StructType(StructField(_EndTime,StringType,true),StructField(_BlockSequenceNumber,StringType,true),StructField(_GatewayCollectedTime,StringType,true),StructField(_IntervalSequenceNumber,StringType,true),StructField(Reading,ArrayType(StructType(StructField(_Channel,StringType,true),StructField(_RawValue,StringType,true),StructField(_Value,StringType,true),StructField(_UOM,StringType,true),StructField(_BlockEndValue,StringType,true)),true),true)),true),true)),true)))
-                                                   :        +- LogicalRDD [aep_opco#34, aep_channel_id#35, aep_derived_uom#36, aep_raw_uom#37, name_register#38, aep_srvc_qlty_idntfr#39, value_mltplr_flg#40], false
-                                                   +- Project [prem_nb#229, bill_cnst#247, acct_clas_cd#277, acct_type_cd#272, devc_cd#235, pgm_id_nm#238, concat(coalesce(tx_mand_data#280, ), coalesce(doe_nb#281, ), coalesce(serv_deliv_id#282, )) AS sd#398, mfr_devc_ser_nbr#233, mtr_pnt_nb#242, tarf_pnt_nb#243, cast(null as string) AS cmsg_mtr_mult_nb#399, mtr_inst_ts#236, mtr_rmvl_ts#237, unix_timestamp(mtr_inst_ts#236, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) AS unix_mtr_inst_ts#400L, CASE WHEN (mtr_rmvl_ts#237 = 9999-01-01) THEN unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd, Some(America/New_York), false) ELSE unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) END AS unix_mtr_rmvl_ts#401L, unix_timestamp(acct_turn_on_dt#231, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_on_dt#402L, unix_timestamp(acct_turn_off_dt#232, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_off_dt#403L, serv_city_ad#269 AS aep_city#404, serv_zip_ad#270 AS aep_zip#405, state_cd#248 AS aep_state#406]
-                                                      +- Filter co_cd_ownr#284 IN (10,07)
-                                                         +- SubqueryAlias spark_catalog.stg_nonvee.meter_premise_macs_ami
-                                                            +- Relation spark_catalog.stg_nonvee.meter_premise_macs_ami[prem_nb#229,bill_acct_nb#230,acct_turn_on_dt#231,acct_turn_off_dt#232,mfr_devc_ser_nbr#233,mfr_cd#234,devc_cd#235,mtr_inst_ts#236,mtr_rmvl_ts#237,pgm_id_nm#238,inst_devc_type_cd#239,mtr_kind_cd#240,mtr_use_cd#241,mtr_pnt_nb#242,tarf_pnt_nb#243,tod_mtr_fl#244,mtr_stat_cd#245,dial_cnst#246,bill_cnst#247,state_cd#248,dvsn_cd#249,jrsd_cd#250,area_cd#251,phys_inst_dt#252,... 32 more fields] orc
-
-Traceback (most recent call last):
-  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0002/container_1772620433903_0002_01_000001/pyspark.zip/pyspark/sql/session.py", line 1631, in sql
-    return DataFrame(self._jsparkSession.sql(sqlQuery, litArgs), self)
-  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0002/container_1772620433903_0002_01_000001/py4j-0.10.9.7-src.zip/py4j/java_gateway.py", line 1322, in __call__
-    return_value = get_return_value(
-  File "/mnt/yarn/usercache/livy/appcache/application_1772620433903_0002/container_1772620433903_0002_01_000001/pyspark.zip/pyspark/errors/exceptions/captured.py", line 185, in deco
-    raise converted from None
-pyspark.errors.exceptions.captured.AnalysisException: [INVALID_NON_DETERMINISTIC_EXPRESSIONS] The operator expects a deterministic expression, but the actual expression is "((((aep_usage_dt IN (2026-02-19)) AND (aep_usage_dt = aep_usage_dt)) AND ((aep_meter_bucket = aep_meter_bucket) AND (serialnumber = serialnumber))) AND (((aep_channel_id = aep_channel_id) AND (aep_raw_uom = aep_raw_uom)) AND (endtimeperiod = endtimeperiod)))", "exists(aep_usage_dt, aep_usage_dt, aep_meter_bucket, serialnumber, aep_channel_id, aep_raw_uom, endtimeperiod)".; line 2 pos 0;
-ReplaceData
-:  +- Filter (((outer(aep_usage_dt#935) IN (2026-02-19) AND (outer(aep_usage_dt#935) = aep_usage_dt#624)) AND ((outer(aep_meter_bucket#936) = aep_meter_bucket#563) AND (outer(serialnumber#890) = serialnumber#541))) AND (((outer(aep_channel_id#906) = aep_channel_id#610) AND (outer(aep_raw_uom#907) = aep_raw_uom#547)) AND (outer(endtimeperiod#914) = endtimeperiod#615)))
-:     +- SubqueryAlias s
-:        +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 23 more fields]
-:           +- SubqueryAlias interval_data_files_oh_xfrm_vw
-:              +- View (`interval_data_files_oh_xfrm_vw`, [serialnumber#541,source#605,aep_devicecode#553,isvirtual_meter#606,timezoneoffset#607,aep_premise_nb#550,aep_service_point#608,aep_mtr_install_ts#560,aep_mtr_removal_ts#559,aep_srvc_dlvry_id#555,aep_comp_mtr_mltplr#674,name_register#204,isvirtual_register#609,toutier#669,toutiername#670,aep_srvc_qlty_idntfr#549,aep_channel_id#610,aep_raw_uom#547,aep_sec_per_intrvl#675,aep_meter_alias#612,aep_meter_program#554,aep_billable_ind#671,aep_usage_type#613,aep_timezone_cd#614,endtimeperiod#615,starttimeperiod#616,value#676,aep_raw_value#677,scalarfloat#678,aep_data_quality_cd#672,aep_data_validation#673,aep_acct_cls_cd#551,aep_acct_type_cd#552,aep_mtr_pnt_nb#556,aep_tarf_pnt_nb#557,aep_endtime_utc#620,aep_city#404,aep_zip#561,aep_state#406,hdp_update_user#562,hdp_insert_dttm#679,hdp_update_dttm#680,authority#623,aep_derived_uom#548,data_type#625,aep_opco#540,aep_usage_dt#624,aep_meter_bucket#563])
-:                 +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                    +- Filter (row_num#730 = 1)
-:                       +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 25 more fields]
-:                          +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 26 more fields]
-:                             +- Window [row_number() windowspecdefinition(serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547, hdp_insert_dttm#679 DESC NULLS LAST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS row_num#730], [serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547], [hdp_insert_dttm#679 DESC NULLS LAST]
-:                                +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                                   +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, cast(aep_comp_mtr_mltplr#619 as double) AS aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, cast(null as string) AS toutier#669, cast(null as string) AS toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, cast(aep_sec_per_intrvl#611 as double) AS aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, cast(null as string) AS aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-:                                      +- Project [serialnumber#541, nonvee-hes AS source#605, aep_devicecode#553, N AS isvirtual_meter#606, interval_epoch#119 AS timezoneoffset#607, aep_premise_nb#550, CASE WHEN ((isnotnull(aep_premise_nb#550) AND isnotnull(aep_tarf_pnt_nb#557)) AND isnotnull(aep_mtr_pnt_nb#556)) THEN concat(aep_premise_nb#550, -, aep_tarf_pnt_nb#557, -, aep_mtr_pnt_nb#556) ELSE cast(null as string) END AS aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, N AS isvirtual_register#609, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, channel#120 AS aep_channel_id#610, (cast(intervallength#544 as int) * 60) AS aep_sec_per_intrvl#611, cast(null as string) AS aep_meter_alias#612, aep_meter_program#554, interval AS aep_usage_type#613, US/Eastern AS aep_timezone_cd#614, endtime#201 AS endtimeperiod#615, starttime#200 AS starttimeperiod#616, CASE WHEN (value_mltplr_flg#40 = Y) THEN (cast(value#122 as float) * cast(bill_cnst#247 as float)) ELSE cast(value#122 as float) END AS value#617, aep_raw_value#546, bill_cnst#247 AS scalarfloat#618, ... 19 more fields]
-:                                         +- Project [filename#48, oh AS aep_opco#540, MeterName#199 AS serialnumber#541, UtilDeviceID#66 AS utildeviceid#542, MacID#67 AS macid#543, IntervalLength#68 AS intervallength#544, blockstarttime#69, blockendtime#70, NumberIntervals#71 AS numberintervals#545, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, value#122 AS aep_raw_value#546, value#122, uom#202 AS aep_raw_uom#547, upper(aep_uom#203) AS aep_derived_uom#548, name_register#204, aep_sqi#205 AS aep_srvc_qlty_idntfr#549, prem_nb#229 AS aep_premise_nb#550, bill_cnst#247, ... 17 more fields]
-:                                            +- Join LeftOuter, (((MeterName#199 = mfr_devc_ser_nbr#233) AND ((unix_endtime#427L >= unix_mtr_inst_ts#400L) AND (unix_endtime#427L <= unix_mtr_rmvl_ts#401L))) AND ((unix_endtime#427L >= unix_acct_turn_on_dt#402L) AND (unix_endtime#427L <= unix_acct_turn_off_dt#403L)))
-:                                               :- Project [filename#48, MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, uom#202, part_date#28, aep_uom#203, name_register#204, aep_sqi#205, value_mltplr_flg#40, unix_timestamp(endtime#201, yyyy-MM-dd'T'HH:mm:ssXXX, Some(America/New_York), false) AS unix_endtime#427L]
-:                                               :  +- Project [filename#48, trim(MeterName#65, None) AS MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, concat(starttime#117, interval_epoch#119) AS starttime#200, concat(endtime#118, interval_epoch#119) AS endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, lower(trim(uom#123, None)) AS uom#202, part_date#28, coalesce(aep_derived_uom#36, UNK) AS aep_uom#203, CASE WHEN isnotnull(name_register#38) THEN regexp_replace(name_register#38, mtr_ivl_len, IntervalLength#68, 1) ELSE UNK END AS name_register#204, coalesce(aep_srvc_qlty_idntfr#39, UNK) AS aep_sqi#205, value_mltplr_flg#40]
-:                                               :     +- Join LeftOuter, (channel#120 = aep_channel_id#35)
-:                                               :        :- Filter (((isnotnull(channel#120) AND isnotnull(rawvalue#121)) AND isnotnull(value#122)) AND isnotnull(uom#123))
-:                                               :        :  +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, from_unixtime((unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false) - cast((cast(IntervalLength#68 as int) * 60) as bigint)), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS starttime#117, from_unixtime(unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS endtime#118, substring(int_endtime#72, -6, 6) AS interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, exp_reading#101._Channel AS channel#120, exp_reading#101._RawValue AS rawvalue#121, exp_reading#101._Value AS value#122, exp_reading#101._UOM AS uom#123, part_date#28]
-:                                               :        :     +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, part_date#28, int_endtime#72, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, int_reading#76, exp_reading#101]
-:                                               :        :        +- Generate explode(int_reading#76), false, [exp_reading#101]
-:                                               :        :           +- Filter (cast(date_format(to_timestamp(substring(blockstarttime#69, 1, 10), Some(yyyy-MM-dd), TimestampType, Some(America/New_York), false), yyyyMMdd, Some(America/New_York)) as int) >= 20150301)
-:                                               :        :              +- Project [filename#48, metername#8 AS MeterName#65, utildeviceid#13 AS UtilDeviceID#66, macid#18 AS MacID#67, interval_reading#23._IntervalLength AS IntervalLength#68, interval_reading#23._StartTime AS blockstarttime#69, interval_reading#23._EndTime AS blockendtime#70, interval_reading#23._NumberIntervals AS NumberIntervals#71, part_date#28, exp_interval#57._EndTime AS int_endtime#72, exp_interval#57._GatewayCollectedTime AS int_gatewaycollectedtime#73, exp_interval#57._BlockSequenceNumber AS int_blocksequencenumber#74, exp_interval#57._IntervalSequenceNumber AS int_intervalsequencenumber#75, exp_interval#57.Reading AS int_reading#76]
-:                                               :        :                 +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, filename#48, exp_interval#57]
-:                                               :        :                    +- Generate explode(interval_reading#23.Interval), false, [exp_interval#57]
-:                                               :        :                       +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, input_file_name() AS filename#48]
-:                                               :        :                          +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, 20260219_2131 AS part_date#28]
-:                                               :        :                             +- Project [metername#8, utildeviceid#13, macid#18, IntervalReadData#3 AS interval_reading#23]
-:                                               :        :                                +- Project [metername#8, utildeviceid#13, _MacID#2 AS macid#18, IntervalReadData#3]
-:                                               :        :                                   +- Project [metername#8, _UtilDeviceID#1 AS utildeviceid#13, _MacID#2, IntervalReadData#3]
-:                                               :        :                                      +- Project [_MeterName#0 AS metername#8, _UtilDeviceID#1, _MacID#2, IntervalReadData#3]
-:                                               :        :                                         +- Relation [_MeterName#0,_UtilDeviceID#1,_MacID#2,IntervalReadData#3] XmlRelation(com.databricks.spark.xml.DefaultSource$$Lambda$2709/0x0000000801fcf070@7a4bd827,Some(s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz),Map(valuetag -> _VALUE, path -> s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz, attributeprefix -> _, nullvalue -> , mode -> PERMISSIVE, rowtag -> MeterData),StructType(StructField(_MeterName,StringType,true),StructField(_UtilDeviceID,StringType,true),StructField(_MacID,StringType,true),StructField(IntervalReadData,StructType(StructField(_IntervalLength,StringType,true),StructField(_StartTime,StringType,true),StructField(_EndTime,StringType,true),StructField(_NumberIntervals,StringType,true),StructField(Interval,ArrayType(StructType(StructField(_EndTime,StringType,true),StructField(_BlockSequenceNumber,StringType,true),StructField(_GatewayCollectedTime,StringType,true),StructField(_IntervalSequenceNumber,StringType,true),StructField(Reading,ArrayType(StructType(StructField(_Channel,StringType,true),StructField(_RawValue,StringType,true),StructField(_Value,StringType,true),StructField(_UOM,StringType,true),StructField(_BlockEndValue,StringType,true)),true),true)),true),true)),true)))
-:                                               :        +- LogicalRDD [aep_opco#34, aep_channel_id#35, aep_derived_uom#36, aep_raw_uom#37, name_register#38, aep_srvc_qlty_idntfr#39, value_mltplr_flg#40], false
-:                                               +- Project [prem_nb#229, bill_cnst#247, acct_clas_cd#277, acct_type_cd#272, devc_cd#235, pgm_id_nm#238, concat(coalesce(tx_mand_data#280, ), coalesce(doe_nb#281, ), coalesce(serv_deliv_id#282, )) AS sd#398, mfr_devc_ser_nbr#233, mtr_pnt_nb#242, tarf_pnt_nb#243, cast(null as string) AS cmsg_mtr_mult_nb#399, mtr_inst_ts#236, mtr_rmvl_ts#237, unix_timestamp(mtr_inst_ts#236, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) AS unix_mtr_inst_ts#400L, CASE WHEN (mtr_rmvl_ts#237 = 9999-01-01) THEN unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd, Some(America/New_York), false) ELSE unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) END AS unix_mtr_rmvl_ts#401L, unix_timestamp(acct_turn_on_dt#231, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_on_dt#402L, unix_timestamp(acct_turn_off_dt#232, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_off_dt#403L, serv_city_ad#269 AS aep_city#404, serv_zip_ad#270 AS aep_zip#405, state_cd#248 AS aep_state#406]
-:                                                  +- Filter co_cd_ownr#284 IN (10,07)
-:                                                     +- SubqueryAlias spark_catalog.stg_nonvee.meter_premise_macs_ami
-:                                                        +- Relation spark_catalog.stg_nonvee.meter_premise_macs_ami[prem_nb#229,bill_acct_nb#230,acct_turn_on_dt#231,acct_turn_off_dt#232,mfr_devc_ser_nbr#233,mfr_cd#234,devc_cd#235,mtr_inst_ts#236,mtr_rmvl_ts#237,pgm_id_nm#238,inst_devc_type_cd#239,mtr_kind_cd#240,mtr_use_cd#241,mtr_pnt_nb#242,tarf_pnt_nb#243,tod_mtr_fl#244,mtr_stat_cd#245,dial_cnst#246,bill_cnst#247,state_cd#248,dvsn_cd#249,jrsd_cd#250,area_cd#251,phys_inst_dt#252,... 32 more fields] orc
-+- MergeRows[serialnumber#948, source#949, aep_devicecode#950, isvirtual_meter#951, timezoneoffset#952, aep_premise_nb#953, aep_service_point#954, aep_mtr_install_ts#955, aep_mtr_removal_ts#956, aep_srvc_dlvry_id#957, aep_comp_mtr_mltplr#958, name_register#959, isvirtual_register#960, toutier#961, toutiername#962, aep_srvc_qlty_idntfr#963, aep_channel_id#964, aep_raw_uom#965, aep_sec_per_intrvl#966, aep_meter_alias#967, aep_meter_program#968, aep_billable_ind#969, aep_usage_type#970, aep_timezone_cd#971, ... 24 more fields]
-   +- Join FullOuter, (((aep_usage_dt#935 IN (2026-02-19) AND (aep_usage_dt#935 = aep_usage_dt#624)) AND ((aep_meter_bucket#936 = aep_meter_bucket#563) AND (serialnumber#890 = serialnumber#541))) AND (((aep_channel_id#906 = aep_channel_id#610) AND (aep_raw_uom#907 = aep_raw_uom#547)) AND (endtimeperiod#914 = endtimeperiod#615))), leftHint=(strategy=no_broadcast_and_replication)
-      :- Project [serialnumber#890, source#891, aep_devicecode#892, isvirtual_meter#893, timezoneoffset#894, aep_premise_nb#895, aep_service_point#896, aep_mtr_install_ts#897, aep_mtr_removal_ts#898, aep_srvc_dlvry_id#899, aep_comp_mtr_mltplr#900, name_register#901, isvirtual_register#902, toutier#903, toutiername#904, aep_srvc_qlty_idntfr#905, aep_channel_id#906, aep_raw_uom#907, aep_sec_per_intrvl#908, aep_meter_alias#909, aep_meter_program#910, aep_billable_ind#911, aep_usage_type#912, aep_timezone_cd#913, ... 26 more fields]
-      :  +- RelationV2[serialnumber#890, source#891, aep_devicecode#892, isvirtual_meter#893, timezoneoffset#894, aep_premise_nb#895, aep_service_point#896, aep_mtr_install_ts#897, aep_mtr_removal_ts#898, aep_srvc_dlvry_id#899, aep_comp_mtr_mltplr#900, name_register#901, isvirtual_register#902, toutier#903, toutiername#904, aep_srvc_qlty_idntfr#905, aep_channel_id#906, aep_raw_uom#907, aep_sec_per_intrvl#908, aep_meter_alias#909, aep_meter_program#910, aep_billable_ind#911, aep_usage_type#912, aep_timezone_cd#913, ... 24 more fields] iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh
-      +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 24 more fields]
-         +- SubqueryAlias s
-            +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, endtimeperiod#615, starttimeperiod#616, ... 23 more fields]
-               +- SubqueryAlias interval_data_files_oh_xfrm_vw
-                  +- View (`interval_data_files_oh_xfrm_vw`, [serialnumber#541,source#605,aep_devicecode#553,isvirtual_meter#606,timezoneoffset#607,aep_premise_nb#550,aep_service_point#608,aep_mtr_install_ts#560,aep_mtr_removal_ts#559,aep_srvc_dlvry_id#555,aep_comp_mtr_mltplr#674,name_register#204,isvirtual_register#609,toutier#669,toutiername#670,aep_srvc_qlty_idntfr#549,aep_channel_id#610,aep_raw_uom#547,aep_sec_per_intrvl#675,aep_meter_alias#612,aep_meter_program#554,aep_billable_ind#671,aep_usage_type#613,aep_timezone_cd#614,endtimeperiod#615,starttimeperiod#616,value#676,aep_raw_value#677,scalarfloat#678,aep_data_quality_cd#672,aep_data_validation#673,aep_acct_cls_cd#551,aep_acct_type_cd#552,aep_mtr_pnt_nb#556,aep_tarf_pnt_nb#557,aep_endtime_utc#620,aep_city#404,aep_zip#561,aep_state#406,hdp_update_user#562,hdp_insert_dttm#679,hdp_update_dttm#680,authority#623,aep_derived_uom#548,data_type#625,aep_opco#540,aep_usage_dt#624,aep_meter_bucket#563])
-                     +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                        +- Filter (row_num#730 = 1)
-                           +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 25 more fields]
-                              +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 26 more fields]
-                                 +- Window [row_number() windowspecdefinition(serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547, hdp_insert_dttm#679 DESC NULLS LAST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS row_num#730], [serialnumber#541, endtimeperiod#615, aep_channel_id#610, aep_raw_uom#547], [hdp_insert_dttm#679 DESC NULLS LAST]
-                                    +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, toutier#669, toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                                       +- Project [serialnumber#541, source#605, aep_devicecode#553, isvirtual_meter#606, timezoneoffset#607, aep_premise_nb#550, aep_service_point#608, aep_mtr_install_ts#560, aep_mtr_removal_ts#559, aep_srvc_dlvry_id#555, cast(aep_comp_mtr_mltplr#619 as double) AS aep_comp_mtr_mltplr#674, name_register#204, isvirtual_register#609, cast(null as string) AS toutier#669, cast(null as string) AS toutiername#670, aep_srvc_qlty_idntfr#549, aep_channel_id#610, aep_raw_uom#547, cast(aep_sec_per_intrvl#611 as double) AS aep_sec_per_intrvl#675, aep_meter_alias#612, aep_meter_program#554, cast(null as string) AS aep_billable_ind#671, aep_usage_type#613, aep_timezone_cd#614, ... 24 more fields]
-                                          +- Project [serialnumber#541, nonvee-hes AS source#605, aep_devicecode#553, N AS isvirtual_meter#606, interval_epoch#119 AS timezoneoffset#607, aep_premise_nb#550, CASE WHEN ((isnotnull(aep_premise_nb#550) AND isnotnull(aep_tarf_pnt_nb#557)) AND isnotnull(aep_mtr_pnt_nb#556)) THEN concat(aep_premise_nb#550, -, aep_tarf_pnt_nb#557, -, aep_mtr_pnt_nb#556) ELSE cast(null as string) END AS aep_service_point#608, aep_srvc_dlvry_id#555, name_register#204, N AS isvirtual_register#609, aep_derived_uom#548, aep_raw_uom#547, aep_srvc_qlty_idntfr#549, channel#120 AS aep_channel_id#610, (cast(intervallength#544 as int) * 60) AS aep_sec_per_intrvl#611, cast(null as string) AS aep_meter_alias#612, aep_meter_program#554, interval AS aep_usage_type#613, US/Eastern AS aep_timezone_cd#614, endtime#201 AS endtimeperiod#615, starttime#200 AS starttimeperiod#616, CASE WHEN (value_mltplr_flg#40 = Y) THEN (cast(value#122 as float) * cast(bill_cnst#247 as float)) ELSE cast(value#122 as float) END AS value#617, aep_raw_value#546, bill_cnst#247 AS scalarfloat#618, ... 19 more fields]
-                                             +- Project [filename#48, oh AS aep_opco#540, MeterName#199 AS serialnumber#541, UtilDeviceID#66 AS utildeviceid#542, MacID#67 AS macid#543, IntervalLength#68 AS intervallength#544, blockstarttime#69, blockendtime#70, NumberIntervals#71 AS numberintervals#545, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, value#122 AS aep_raw_value#546, value#122, uom#202 AS aep_raw_uom#547, upper(aep_uom#203) AS aep_derived_uom#548, name_register#204, aep_sqi#205 AS aep_srvc_qlty_idntfr#549, prem_nb#229 AS aep_premise_nb#550, bill_cnst#247, ... 17 more fields]
-                                                +- Join LeftOuter, (((MeterName#199 = mfr_devc_ser_nbr#233) AND ((unix_endtime#427L >= unix_mtr_inst_ts#400L) AND (unix_endtime#427L <= unix_mtr_rmvl_ts#401L))) AND ((unix_endtime#427L >= unix_acct_turn_on_dt#402L) AND (unix_endtime#427L <= unix_acct_turn_off_dt#403L)))
-                                                   :- Project [filename#48, MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, starttime#200, endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, uom#202, part_date#28, aep_uom#203, name_register#204, aep_sqi#205, value_mltplr_flg#40, unix_timestamp(endtime#201, yyyy-MM-dd'T'HH:mm:ssXXX, Some(America/New_York), false) AS unix_endtime#427L]
-                                                   :  +- Project [filename#48, trim(MeterName#65, None) AS MeterName#199, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, concat(starttime#117, interval_epoch#119) AS starttime#200, concat(endtime#118, interval_epoch#119) AS endtime#201, interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, channel#120, rawvalue#121, value#122, lower(trim(uom#123, None)) AS uom#202, part_date#28, coalesce(aep_derived_uom#36, UNK) AS aep_uom#203, CASE WHEN isnotnull(name_register#38) THEN regexp_replace(name_register#38, mtr_ivl_len, IntervalLength#68, 1) ELSE UNK END AS name_register#204, coalesce(aep_srvc_qlty_idntfr#39, UNK) AS aep_sqi#205, value_mltplr_flg#40]
-                                                   :     +- Join LeftOuter, (channel#120 = aep_channel_id#35)
-                                                   :        :- Filter (((isnotnull(channel#120) AND isnotnull(rawvalue#121)) AND isnotnull(value#122)) AND isnotnull(uom#123))
-                                                   :        :  +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, from_unixtime((unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false) - cast((cast(IntervalLength#68 as int) * 60) as bigint)), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS starttime#117, from_unixtime(unix_timestamp(substring(int_endtime#72, 1, 19), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York), false), yyyy-MM-dd'T'HH:mm:ss, Some(America/New_York)) AS endtime#118, substring(int_endtime#72, -6, 6) AS interval_epoch#119, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, exp_reading#101._Channel AS channel#120, exp_reading#101._RawValue AS rawvalue#121, exp_reading#101._Value AS value#122, exp_reading#101._UOM AS uom#123, part_date#28]
-                                                   :        :     +- Project [filename#48, MeterName#65, UtilDeviceID#66, MacID#67, IntervalLength#68, blockstarttime#69, blockendtime#70, NumberIntervals#71, part_date#28, int_endtime#72, int_gatewaycollectedtime#73, int_blocksequencenumber#74, int_intervalsequencenumber#75, int_reading#76, exp_reading#101]
-                                                   :        :        +- Generate explode(int_reading#76), false, [exp_reading#101]
-                                                   :        :           +- Filter (cast(date_format(to_timestamp(substring(blockstarttime#69, 1, 10), Some(yyyy-MM-dd), TimestampType, Some(America/New_York), false), yyyyMMdd, Some(America/New_York)) as int) >= 20150301)
-                                                   :        :              +- Project [filename#48, metername#8 AS MeterName#65, utildeviceid#13 AS UtilDeviceID#66, macid#18 AS MacID#67, interval_reading#23._IntervalLength AS IntervalLength#68, interval_reading#23._StartTime AS blockstarttime#69, interval_reading#23._EndTime AS blockendtime#70, interval_reading#23._NumberIntervals AS NumberIntervals#71, part_date#28, exp_interval#57._EndTime AS int_endtime#72, exp_interval#57._GatewayCollectedTime AS int_gatewaycollectedtime#73, exp_interval#57._BlockSequenceNumber AS int_blocksequencenumber#74, exp_interval#57._IntervalSequenceNumber AS int_intervalsequencenumber#75, exp_interval#57.Reading AS int_reading#76]
-                                                   :        :                 +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, filename#48, exp_interval#57]
-                                                   :        :                    +- Generate explode(interval_reading#23.Interval), false, [exp_interval#57]
-                                                   :        :                       +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, part_date#28, input_file_name() AS filename#48]
-                                                   :        :                          +- Project [metername#8, utildeviceid#13, macid#18, interval_reading#23, 20260219_2131 AS part_date#28]
-                                                   :        :                             +- Project [metername#8, utildeviceid#13, macid#18, IntervalReadData#3 AS interval_reading#23]
-                                                   :        :                                +- Project [metername#8, utildeviceid#13, _MacID#2 AS macid#18, IntervalReadData#3]
-                                                   :        :                                   +- Project [metername#8, _UtilDeviceID#1 AS utildeviceid#13, _MacID#2, IntervalReadData#3]
-                                                   :        :                                      +- Project [_MeterName#0 AS metername#8, _UtilDeviceID#1, _MacID#2, IntervalReadData#3]
-                                                   :        :                                         +- Relation [_MeterName#0,_UtilDeviceID#1,_MacID#2,IntervalReadData#3] XmlRelation(com.databricks.spark.xml.DefaultSource$$Lambda$2709/0x0000000801fcf070@7a4bd827,Some(s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz),Map(valuetag -> _VALUE, path -> s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-1.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-10.xml.gz,s3://aep-datalake-raw-dev/util/intervals/nonvee/uiq_info/oh/20260219_2131/20260219-8394453c-d45c-4040-b489-bca288e7c734-1-100.xml.gz, attributeprefix -> _, nullvalue -> , mode -> PERMISSIVE, rowtag -> MeterData),StructType(StructField(_MeterName,StringType,true),StructField(_UtilDeviceID,StringType,true),StructField(_MacID,StringType,true),StructField(IntervalReadData,StructType(StructField(_IntervalLength,StringType,true),StructField(_StartTime,StringType,true),StructField(_EndTime,StringType,true),StructField(_NumberIntervals,StringType,true),StructField(Interval,ArrayType(StructType(StructField(_EndTime,StringType,true),StructField(_BlockSequenceNumber,StringType,true),StructField(_GatewayCollectedTime,StringType,true),StructField(_IntervalSequenceNumber,StringType,true),StructField(Reading,ArrayType(StructType(StructField(_Channel,StringType,true),StructField(_RawValue,StringType,true),StructField(_Value,StringType,true),StructField(_UOM,StringType,true),StructField(_BlockEndValue,StringType,true)),true),true)),true),true)),true)))
-                                                   :        +- LogicalRDD [aep_opco#34, aep_channel_id#35, aep_derived_uom#36, aep_raw_uom#37, name_register#38, aep_srvc_qlty_idntfr#39, value_mltplr_flg#40], false
-                                                   +- Project [prem_nb#229, bill_cnst#247, acct_clas_cd#277, acct_type_cd#272, devc_cd#235, pgm_id_nm#238, concat(coalesce(tx_mand_data#280, ), coalesce(doe_nb#281, ), coalesce(serv_deliv_id#282, )) AS sd#398, mfr_devc_ser_nbr#233, mtr_pnt_nb#242, tarf_pnt_nb#243, cast(null as string) AS cmsg_mtr_mult_nb#399, mtr_inst_ts#236, mtr_rmvl_ts#237, unix_timestamp(mtr_inst_ts#236, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) AS unix_mtr_inst_ts#400L, CASE WHEN (mtr_rmvl_ts#237 = 9999-01-01) THEN unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd, Some(America/New_York), false) ELSE unix_timestamp(mtr_rmvl_ts#237, yyyy-MM-dd HH:mm:ss, Some(America/New_York), false) END AS unix_mtr_rmvl_ts#401L, unix_timestamp(acct_turn_on_dt#231, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_on_dt#402L, unix_timestamp(acct_turn_off_dt#232, yyyy-MM-dd, Some(America/New_York), false) AS unix_acct_turn_off_dt#403L, serv_city_ad#269 AS aep_city#404, serv_zip_ad#270 AS aep_zip#405, state_cd#248 AS aep_state#406]
-                                                      +- Filter co_cd_ownr#284 IN (10,07)
-                                                         +- SubqueryAlias spark_catalog.stg_nonvee.meter_premise_macs_ami
-                                                            +- Relation spark_catalog.stg_nonvee.meter_premise_macs_ami[prem_nb#229,bill_acct_nb#230,acct_turn_on_dt#231,acct_turn_off_dt#232,mfr_devc_ser_nbr#233,mfr_cd#234,devc_cd#235,mtr_inst_ts#236,mtr_rmvl_ts#237,pgm_id_nm#238,inst_devc_type_cd#239,mtr_kind_cd#240,mtr_use_cd#241,mtr_pnt_nb#242,tarf_pnt_nb#243,tod_mtr_fl#244,mtr_stat_cd#245,dial_cnst#246,bill_cnst#247,state_cd#248,dvsn_cd#249,jrsd_cd#250,area_cd#251,phys_inst_dt#252,... 32 more fields] orc
-
+[
+  {
+    "Name": "serialnumber",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "1",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "source",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "2",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_devicecode",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "3",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "isvirtual_meter",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "4",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "timezoneoffset",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "5",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_premise_nb",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "6",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_service_point",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "7",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_mtr_install_ts",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "8",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_mtr_removal_ts",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "9",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_srvc_dlvry_id",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "10",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_comp_mtr_mltplr",
+    "Type": "double",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "11",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "name_register",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "12",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "isvirtual_register",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "13",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "toutier",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "14",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "toutiername",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "15",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_srvc_qlty_idntfr",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "16",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_channel_id",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "17",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_raw_uom",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "18",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_sec_per_intrvl",
+    "Type": "double",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "19",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_meter_alias",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "20",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_meter_program",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "21",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_billable_ind",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "22",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_usage_type",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "23",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_timezone_cd",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "24",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "endtimeperiod",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "25",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "starttimeperiod",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "26",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "value",
+    "Type": "float",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "27",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_raw_value",
+    "Type": "float",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "28",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "scalarfloat",
+    "Type": "float",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "29",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_data_quality_cd",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "30",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_data_validation",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "31",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_acct_cls_cd",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "32",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_acct_type_cd",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "33",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_mtr_pnt_nb",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "34",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_tarf_pnt_nb",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "35",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_endtime_utc",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "36",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_city",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "37",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_zip",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "38",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_state",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "39",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "hdp_update_user",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "40",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "hdp_insert_dttm",
+    "Type": "timestamp",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "41",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "hdp_update_dttm",
+    "Type": "timestamp",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "42",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "authority",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "43",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_derived_uom",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "44",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_opco",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "45",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_usage_dt",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "46",
+      "iceberg.field.optional": "true"
+    }
+  },
+  {
+    "Name": "aep_meter_bucket",
+    "Type": "string",
+    "Parameters": {
+      "iceberg.field.current": "true",
+      "iceberg.field.id": "47",
+      "iceberg.field.optional": "true"
+    }
+  }
+]
