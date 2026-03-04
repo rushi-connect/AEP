@@ -1,3 +1,5 @@
+Completed writing data to the Iceberg table. The current implementation using DataFrames can be considered a draft version of the Info pipeline. Tomorrow I will start implementing the actual Spark job.
+
 An error was encountered:
 [INVALID_NON_DETERMINISTIC_EXPRESSIONS] The operator expects a deterministic expression, but the actual expression is "((((aep_usage_dt IN (2026-02-19)) AND (aep_usage_dt = aep_usage_dt)) AND ((aep_meter_bucket = aep_meter_bucket) AND (serialnumber = serialnumber))) AND (((aep_channel_id = aep_channel_id) AND (aep_raw_uom = aep_raw_uom)) AND (endtimeperiod = endtimeperiod)))", "exists(aep_usage_dt, aep_usage_dt, aep_meter_bucket, serialnumber, aep_channel_id, aep_raw_uom, endtimeperiod)".; line 2 pos 0;
 ReplaceData
