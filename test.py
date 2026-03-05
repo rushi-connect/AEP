@@ -687,7 +687,9 @@ interval_data_files_oh_xfrm_df.printSchema()
 
 # Step 1: Register DataFrame as temp view
 ##interval_data_files_oh_xfrm_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
-
+------------------------------------------------------------------------------------
+METHOD - 1
+------------------------------------------------------------------------------------
 # Step 1: Set checkpoint directory
 spark.sparkContext.setCheckpointDir("s3://aep-datalake-work-dev/temp/checkpoint/")
 
@@ -707,7 +709,25 @@ usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
 #usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
 #usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
 
+------------------------------------------------------------------------------------
+METHOD - 2
+------------------------------------------------------------------------------------
+from pyspark.storagelevel import StorageLevel
 
+# Step 1: Persist to memory AND disk (most reliable persist option)
+materialized_df = interval_data_files_oh_xfrm_df.persist(StorageLevel.DISK_ONLY)
+
+# Step 2: Force execution (important - makes Spark actually compute and store)
+materialized_df.count()
+
+# Step 3: Create temp view
+materialized_df.createOrReplaceTempView("interval_data_files_oh_xfrm_vw")
+
+# Step 4: Get usage dates
+usage_dates_df = materialized_df.select("aep_usage_dt").distinct()
+usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
+usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
+---------------------------------------------------------------------------------
 
 # Step 3: Execute MERGE
 merge_sql = f"""
