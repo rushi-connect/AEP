@@ -920,3 +920,72 @@ WHEN NOT MATCHED THEN
 # Execute MERGE
 spark.sql(merge_sql)
 
+
+Step 7: INSERT into Downstream Table
+What this does:
+
+Reads NEW records from stg_nonvee.interval_data_files_oh_xfrm (where data_type='new')
+Inserts into downstream table xfrm_interval.reading_ivl_nonvee_incr
+Adds run_date column with current timestamp for tracking when data was processed
+This table is used by downstream systems to consume the interval data
+Source: iceberg_catalog.stg_nonvee.interval_data_files_oh_xfrm
+Target: iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
+Columns: 45 data columns + 2 partition columns (aep_opco, run_date)
+
+
+insert_downstream_sql = """
+INSERT INTO iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
+SELECT
+    serialnumber,
+    source,
+    aep_devicecode,
+    isvirtual_meter,
+    timezoneoffset,
+    aep_premise_nb,
+    aep_service_point,
+    aep_mtr_install_ts,
+    aep_mtr_removal_ts,
+    aep_srvc_dlvry_id,
+    aep_comp_mtr_mltplr,
+    name_register,
+    isvirtual_register,
+    toutier,
+    toutiername,
+    aep_srvc_qlty_idntfr,
+    aep_channel_id,
+    aep_raw_uom,
+    aep_sec_per_intrvl,
+    aep_meter_alias,
+    aep_meter_program,
+    aep_billable_ind,
+    aep_usage_type,
+    aep_timezone_cd,
+    endtimeperiod,
+    starttimeperiod,
+    value,
+    aep_raw_value,
+    scalarfloat,
+    aep_data_quality_cd,
+    aep_data_validation,
+    aep_acct_cls_cd,
+    aep_acct_type_cd,
+    aep_mtr_pnt_nb,
+    aep_tarf_pnt_nb,
+    aep_endtime_utc,
+    aep_city,
+    aep_zip,
+    aep_state,
+    hdp_update_user,
+    hdp_insert_dttm,
+    hdp_update_dttm,
+    authority,
+    aep_usage_dt,
+    aep_derived_uom,
+    aep_opco,
+    date_format(current_timestamp(), 'yyyyMMdd_HHmmss') as run_date
+FROM interval_data_files_oh_xfrm_vw
+WHERE data_type = 'new' AND aep_opco = 'oh'
+"""
+
+spark.sql(insert_downstream_sql)
+print("INSERT into downstream table completed!")
