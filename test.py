@@ -24,6 +24,21 @@ batch_start_dttm_str = "2024-10-25 00:00:00"  # Start of Oct 25
 batch_end_dttm_str = "2024-10-26 00:00:00"    # End of Oct 25
 skip_archive = "true"
 
+ Limit to 10 files for testing
+max_files = 10
+limited_files_map = {}
+file_count = 0
+
+for k, files in filtered_data_files_map.items():
+    if file_count >= max_files:
+        break
+    remaining = max_files - file_count
+    limited_files_map[k] = files[:remaining]
+    file_count += len(limited_files_map[k])
+
+filtered_data_files_map = limited_files_map
+print(f"===== Limited to {sum(len(f) for f in filtered_data_files_map.values())} files for testing =====")
+
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - FILE PROCESSING (OH OPCO)
 # ============================================================================
