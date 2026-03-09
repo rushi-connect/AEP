@@ -14,14 +14,15 @@ LEFT JOIN interval data with meter_premise_macs_ami table to enrich meter readin
     }
 }
 
+# hard-coded for development
 job_name = "uiq-nonvee-info"
 aws_env = "dev"
-opco = "oh"  # Change to your actual opco: oh, im, pso, tx, ap, swp
+opco = "oh"
 work_bucket = f'aep-datalake-work-{aws_env}'
 archive_bucket = f'aep-datalake-raw-{aws_env}'
-batch_start_dttm_str = None
-batch_end_dttm_str = None
-skip_archive = None
+batch_start_dttm_str = "2024-10-25 00:00:00"  # Start of Oct 25
+batch_end_dttm_str = "2024-10-26 00:00:00"    # End of Oct 25
+skip_archive = "true"
 
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - FILE PROCESSING (OH OPCO)
