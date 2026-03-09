@@ -1,4 +1,19 @@
 LEFT JOIN interval data with meter_premise_macs_ami table to enrich meter readings with premise/account details (address, device code, meter program, install/removal timestamps) using metername match and time window validation.
+
+%%configure -f
+{
+    "conf": {
+        "spark.jars.packages": "com.databricks:spark-xml_2.12:0.18.0",
+        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+        "spark.sql.catalog.spark_catalog.type": "glue",
+        "spark.sql.legacy.timeParserPolicy": "LEGACY",
+        "spark.sql.catalog.iceberg_catalog": "org.apache.iceberg.spark.SparkCatalog",
+        "spark.sql.catalog.spark_catalog.glue.id": "889415020100",
+        "spark.sql.catalog.spark_catalog.warehouse": "s3://aep-datalake-work-dev/test/warehouse"
+    }
+}
+
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - FILE PROCESSING (OH OPCO)
 # ============================================================================
