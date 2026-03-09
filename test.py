@@ -14,6 +14,25 @@ LEFT JOIN interval data with meter_premise_macs_ami table to enrich meter readin
     }
 }
 
+%%configure -f
+{
+    "conf": {
+        "spark.jars.packages": "com.databricks:spark-xml_2.12:0.18.0",
+        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+        "spark.sql.catalog.spark_catalog.type": "glue",
+        "spark.sql.catalog.spark_catalog.glue.id": "889415020100",
+        "spark.sql.catalog.spark_catalog.warehouse": "s3://aep-datalake-work-dev/test/warehouse",
+        "spark.sql.legacy.timeParserPolicy": "LEGACY",
+        "spark.sql.catalog.iceberg_catalog": "org.apache.iceberg.spark.SparkCatalog",
+        "spark.sql.catalog.iceberg_catalog.type": "glue",
+        "spark.sql.catalog.iceberg_catalog.glue.id": "889415020100",
+        "spark.sql.catalog.iceberg_catalog.warehouse": "s3://aep-datalake-work-dev/test/warehouse"
+    }
+}
+
+
+
 # hard-coded for development
 job_name = "uiq-nonvee-info"
 aws_env = "dev"
@@ -38,6 +57,12 @@ for k, files in filtered_data_files_map.items():
 
 filtered_data_files_map = limited_files_map
 print(f"===== Limited to {sum(len(f) for f in filtered_data_files_map.values())} files for testing =====")
+
+# Check the transformed data instead of MERGE
+print(f"Total records: {materialized_df.count()}")
+materialized_df.show(10, truncate=False)
+materialized_df.printSchema()
+
 
 # ============================================================================
 # NONVEE UIQ INFO PIPELINE - FILE PROCESSING (OH OPCO)
