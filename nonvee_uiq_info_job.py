@@ -7,11 +7,28 @@ spark-submit \
   --conf spark.sql.catalog.spark_catalog.type=glue \
   --conf spark.sql.catalog.spark_catalog.glue.id=889415020100 \
   --conf spark.sql.catalog.spark_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse \
+  --conf spark.sql.catalog.iceberg_catalog=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.iceberg_catalog.type=glue \
+  --conf spark.sql.catalog.iceberg_catalog.glue.id=889415020100 \
+  --conf spark.sql.catalog.iceberg_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse \
+  --conf spark.sql.session.timeZone="America/New_York" \
+  --conf spark.driver.extraJavaOptions="-Duser.timezone=America/New_York" \
+  --conf spark.executor.extraJavaOptions="-Duser.timezone=America/New_York" \
+  --conf spark.sql.legacy.timeParserPolicy=LEGACY \
   --driver-cores 2 \
   --driver-memory 10g \
   --conf spark.driver.maxResultSize=5g \
   --executor-cores 1 \
-  --executor-memory 5g
+  --executor-memory 5g \
+  nonvee_uiq_info_job.py \
+  --job_name uiq-nonvee-info \
+  --aws_env dev \
+  --opco oh \
+  --work_bucket aep-datalake-work-dev \
+  --archive_bucket aep-datalake-raw-dev \
+  --batch_start_dttm_str "2024-10-25 00:00:00" \
+  --batch_end_dttm_str "2024-10-26 00:00:00" \
+  --skip_archive true
 """
 
 import time
@@ -58,20 +75,17 @@ info_xml_schema = StructType([
     StructField("_MeterName", StringType(), True),
     StructField("_UtilDeviceID", StringType(), True),
     StructField("_MacID", StringType(), True),
-    
     StructField("IntervalReadData", StructType([
         StructField("_IntervalLength", StringType(), True),
         StructField("_StartTime", StringType(), True),
         StructField("_EndTime", StringType(), True),
-        StructField("_NumberIntervals", StringType(), True),
-        
+        StructField("_NumberIntervals", StringType(), True),       
         StructField("Interval", ArrayType(
             StructType([
                 StructField("_EndTime", StringType(), True),
                 StructField("_BlockSequenceNumber", StringType(), True),
                 StructField("_GatewayCollectedTime", StringType(), True),
-                StructField("_IntervalSequenceNumber", StringType(), True),
-                
+                StructField("_IntervalSequenceNumber", StringType(), True),               
                 StructField("Reading", ArrayType(
                     StructType([
                         StructField("_Channel", StringType(), True),
@@ -130,7 +144,6 @@ def get_s3_file_contents(
     response = s3.get_object(Bucket=s3_bucket, Key=s3_key)
     contents = response["Body"].read().decode("utf-8")
     return contents
-
 
 def get_filtered_data_files_map(
     s3_bucket: str,
@@ -207,7 +220,6 @@ def main():
     args = parser.parse_args()
     print(f'completed parsing in {str(timedelta(seconds=time.time() - _time))}')
     print(f'===== args [{type(args)}]: {args} =====')
-
     print(f'===== init vars =====')
     job_name = args.job_name
     aws_env = args.aws_env
@@ -273,6 +285,21 @@ def main():
         data_file_ext=data_file_ext,
     )
 
+    # Limit to 10 files for testing
+    max_files = 10
+    limited_files_map = {}
+    file_count = 0
+
+    for k, files in filtered_data_files_map.items():
+        if file_count >= max_files:
+            break
+        remaining = max_files - file_count
+        limited_files_map[k] = files[:remaining]
+        file_count += len(limited_files_map[k])
+
+    filtered_data_files_map = limited_files_map
+    print(f"===== Limited to {sum(len(f) for f in filtered_data_files_map.values())} files for testing =====")
+
     _time = time.time()
     print(f'===== reading files =====')
     files_count = 0
@@ -332,7 +359,9 @@ def main():
     # Reference: stg_nonvee.interval_data_files_{opco}_src_vw
     # Source: scripts/ddl/stg_nonvee.interval_data_files_{opco}_src_vw.ddl
     # Called by: scripts/source_interval_data_files.sh
+    
     print(f'===== Step 2: 1st EXPLODE (intervals) =====')
+    
     #1st EXPLODE: Flatten interval_reading array
     interval_exploded_df = (
         interval_data_files_src_df
@@ -812,7 +841,7 @@ def main():
     
     # Step 10a: DELETE old data (older than 8 days)
     delete_sql = f"""
-    DELETE FROM iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
+    DELETE FROM iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr_test
     WHERE aep_opco = '{opco}' AND run_date < '{cutoff_date}'
     """
     print(f'===== Deleting old data (run_date < {cutoff_date}) =====')
@@ -878,20 +907,20 @@ def main():
     spark.sql(insert_downstream_sql)
     print(f'===== INSERT downstream completed =====')
 
-    # update last_process_dttm_file
-    # Step 11: Update last_process_dttm file
-    print(f'===== Step 11: Update last_process_dttm =====')
-    s3 = boto3.client("s3")
-    last_process_dttm_file = f'info_last_proc_dt_do_not_remove_{opco}.txt'
-    last_process_dttm_key = f'{parms_prefix}/{last_process_dttm_file}'
-    new_last_process_dttm = batch_end_dttm_ltz.strftime("%Y-%m-%d %H:%M:%S")
+    # # update last_process_dttm_file
+    # # Step 11: Update last_process_dttm file
+    # print(f'===== Step 11: Update last_process_dttm =====')
+    # s3 = boto3.client("s3")
+    # last_process_dttm_file = f'info_last_proc_dt_do_not_remove_{opco}.txt'
+    # last_process_dttm_key = f'{parms_prefix}/{last_process_dttm_file}'
+    # new_last_process_dttm = batch_end_dttm_ltz.strftime("%Y-%m-%d %H:%M:%S")
     
-    s3.put_object(
-        Bucket=work_bucket,
-        Key=last_process_dttm_key,
-        Body=new_last_process_dttm.encode("utf-8")
-    )
-    print(f'===== Updated {last_process_dttm_key} to {new_last_process_dttm} =====')
+    # s3.put_object(
+    #     Bucket=work_bucket,
+    #     Key=last_process_dttm_key,
+    #     Body=new_last_process_dttm.encode("utf-8")
+    # )
+    # print(f'===== Updated {last_process_dttm_key} to {new_last_process_dttm} =====')
 
     if not skip_archive == "true":
         # archive raw xml files
