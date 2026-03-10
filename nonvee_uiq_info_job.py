@@ -10,7 +10,7 @@ spark-submit \
   --conf spark.sql.catalog.iceberg_catalog=org.apache.iceberg.spark.SparkCatalog \
   --conf spark.sql.catalog.iceberg_catalog.type=glue \
   --conf spark.sql.catalog.iceberg_catalog.glue.id=889415020100 \
-  --conf spark.sql.catalog.iceberg_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse \
+  --conf spark.sql.catalog.iceberg_catalog.warehouse=s3://aep-datalake-consume-dev/iceberg_catalog \
   --conf spark.sql.session.timeZone="America/New_York" \
   --conf spark.driver.extraJavaOptions="-Duser.timezone=America/New_York" \
   --conf spark.executor.extraJavaOptions="-Duser.timezone=America/New_York" \
@@ -29,6 +29,10 @@ spark-submit \
   --batch_start_dttm_str "2024-10-25 00:00:00" \
   --batch_end_dttm_str "2024-10-26 00:00:00" \
   --skip_archive true
+"""
+
+"""
+spark-submit --deploy-mode client --packages com.databricks:spark-xml_2.12:0.18.0 --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog --conf spark.sql.catalog.spark_catalog.type=glue --conf spark.sql.catalog.spark_catalog.glue.id=889415020100 --conf spark.sql.catalog.spark_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse --conf spark.sql.catalog.iceberg_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.iceberg_catalog.type=glue --conf spark.sql.catalog.iceberg_catalog.glue.id=889415020100 --conf spark.sql.catalog.iceberg_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse --conf spark.sql.session.timeZone="America/New_York" --conf spark.driver.extraJavaOptions="-Duser.timezone=America/New_York" --conf spark.executor.extraJavaOptions="-Duser.timezone=America/New_York" --conf spark.sql.legacy.timeParserPolicy=LEGACY --driver-cores 2 --driver-memory 10g --conf spark.driver.maxResultSize=5g --executor-cores 1 --executor-memory 5g nonvee_uiq_info_job.py --job_name uiq-nonvee-info --aws_env dev --opco oh --work_bucket aep-datalake-work-dev --archive_bucket aep-datalake-raw-dev --batch_start_dttm_str "2024-10-25 00:00:00" --batch_end_dttm_str "2024-10-26 00:00:00" --skip_archive true
 """
 
 import time
@@ -267,7 +271,7 @@ def main():
     else:
         batch_end_dttm_ltz = current_dttm_ltz
     base_prefix = f'{work_prefix}/{data_files_dir}/{opco}'
-    scratch_dir = "temp-nb"
+    scratch_dir = "temp"
     scratch_path = f'hdfs:///tmp/{scratch_dir}/{str(uuid.uuid4())}'
     print(f'===== batch start dttm: {batch_start_dttm_ltz} =====')
     print(f'===== batch end dttm: {batch_end_dttm_ltz} =====')
@@ -284,21 +288,6 @@ def main():
         data_file_min_size=data_file_min_size,
         data_file_ext=data_file_ext,
     )
-
-    # Limit to 10 files for testing
-    max_files = 10
-    limited_files_map = {}
-    file_count = 0
-
-    for k, files in filtered_data_files_map.items():
-        if file_count >= max_files:
-            break
-        remaining = max_files - file_count
-        limited_files_map[k] = files[:remaining]
-        file_count += len(limited_files_map[k])
-
-    filtered_data_files_map = limited_files_map
-    print(f"===== Limited to {sum(len(f) for f in filtered_data_files_map.values())} files for testing =====")
 
     _time = time.time()
     print(f'===== reading files =====')
@@ -841,7 +830,7 @@ def main():
     
     # Step 10a: DELETE old data (older than 8 days)
     delete_sql = f"""
-    DELETE FROM iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr_test
+    DELETE FROM iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
     WHERE aep_opco = '{opco}' AND run_date < '{cutoff_date}'
     """
     print(f'===== Deleting old data (run_date < {cutoff_date}) =====')
@@ -850,7 +839,7 @@ def main():
     
     # Step 10b: INSERT new data
     insert_downstream_sql = f"""
-    INSERT INTO iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr_test
+    INSERT INTO iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
     SELECT
         serialnumber,
         source,
