@@ -13,8 +13,7 @@ spark = SparkSession.builder \
 # Cell 3: Drop and create table
 spark.sql("DROP TABLE IF EXISTS iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh")
 
-spark.sql("""
-CREATE TABLE iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh (
+CREATE TABLE IF NOT EXISTS iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh(
     serialnumber STRING,
     source STRING,
     aep_devicecode STRING,
@@ -22,15 +21,17 @@ CREATE TABLE iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh (
     timezoneoffset STRING,
     aep_premise_nb STRING,
     aep_service_point STRING,
+    aep_mtr_install_ts STRING,
+    aep_mtr_removal_ts STRING,
     aep_srvc_dlvry_id STRING,
+    aep_comp_mtr_mltplr DOUBLE,
     name_register STRING,
     isvirtual_register STRING,
     toutier STRING,
     toutiername STRING,
-    aep_derived_uom STRING,
-    aep_raw_uom STRING,
     aep_srvc_qlty_idntfr STRING,
     aep_channel_id STRING,
+    aep_raw_uom STRING,
     aep_sec_per_intrvl DOUBLE,
     aep_meter_alias STRING,
     aep_meter_program STRING,
@@ -48,20 +49,20 @@ CREATE TABLE iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh (
     aep_acct_type_cd STRING,
     aep_mtr_pnt_nb STRING,
     aep_tarf_pnt_nb STRING,
-    aep_comp_mtr_mltplr DOUBLE,
     aep_endtime_utc STRING,
-    aep_mtr_removal_ts STRING,
-    aep_mtr_install_ts STRING,
     aep_city STRING,
     aep_zip STRING,
     aep_state STRING,
     hdp_update_user STRING,
     hdp_insert_dttm TIMESTAMP,
     hdp_update_dttm TIMESTAMP,
-    authority STRING
+    authority STRING,
+    aep_derived_uom STRING,
+    aep_opco STRING,
+    aep_usage_dt STRING,
+    aep_meter_bucket STRING
 )
-USING iceberg
-PARTITIONED BY (aep_opco, aep_usage_dt, aep_meter_bucket)
+PARTITIONED BY (aep_usage_dt)
 LOCATION 's3://aep-datalake-consume-dev/intervals/iceberg_catalog/usage_nonvee/reading_ivl_nonvee_oh'
 TBLPROPERTIES (
     'table_type' = 'iceberg',
@@ -69,7 +70,7 @@ TBLPROPERTIES (
     'format' = 'parquet',
     'write_compression' = 'snappy'
 )
-""")
+
 
 
 
