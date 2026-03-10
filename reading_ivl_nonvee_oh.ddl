@@ -1,13 +1,18 @@
-# Step 1: Configure Iceberg catalog
-spark.conf.set("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-spark.conf.set("spark.sql.catalog.iceberg_catalog", "org.apache.iceberg.spark.SparkCatalog")
-spark.conf.set("spark.sql.catalog.iceberg_catalog.catalog-impl", "org.apache.iceberg.aws.glue.GlueCatalog")
-spark.conf.set("spark.sql.catalog.iceberg_catalog.warehouse", "s3://aep-datalake-consume-dev/iceberg_catalog")
+# Cell 2: Create new session with Iceberg configs
+from pyspark.sql import SparkSession
 
-# Step 2: Drop the corrupted table
+spark = SparkSession.builder \
+    .appName("create-table") \
+    .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
+    .config("spark.sql.catalog.iceberg_catalog", "org.apache.iceberg.spark.SparkCatalog") \
+    .config("spark.sql.catalog.iceberg_catalog.catalog-impl", "org.apache.iceberg.aws.glue.GlueCatalog") \
+    .config("spark.sql.catalog.iceberg_catalog.warehouse", "s3://aep-datalake-consume-dev/iceberg_catalog") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# Cell 3: Drop and create table
 spark.sql("DROP TABLE IF EXISTS iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh")
 
-# Step 3: Create the table
 spark.sql("""
 CREATE TABLE iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh (
     serialnumber STRING,
@@ -59,11 +64,15 @@ USING iceberg
 PARTITIONED BY (aep_opco, aep_usage_dt, aep_meter_bucket)
 LOCATION 's3://aep-datalake-consume-dev/intervals/iceberg_catalog/usage_nonvee/reading_ivl_nonvee_oh'
 TBLPROPERTIES (
+    'table_type' = 'iceberg',
     'format-version' = '2',
-    'write.format.default' = 'parquet',
-    'parquet.compress' = 'SNAPPY'
+    'format' = 'parquet',
+    'write_compression' = 'snappy'
 )
 """)
+
+
+
 
 # Step 4: Verify
 spark.sql("DESCRIBE TABLE iceberg_catalog.usage_nonvee.reading_ivl_nonvee_oh").show(truncate=False)
