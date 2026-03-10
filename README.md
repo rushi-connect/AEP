@@ -1,26 +1,13 @@
-AEP Username : s398375
-PW: Twilight=8308868732
-
-
-spark-submit \
-  --deploy-mode client \
-  --packages com.databricks:spark-xml_2.12:0.18.0 \
-  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-  --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
-  --conf spark.sql.catalog.spark_catalog.type=glue \
-  --conf spark.sql.catalog.spark_catalog.glue.id=889415020100 \
-  --conf spark.sql.catalog.spark_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse \
-  --driver-cores 2 \
-  --driver-memory 10g \
-  --conf spark.driver.maxResultSize=5g \
-  --executor-cores 1 \
-  --executor-memory 5g \
-  nonvee_uiq_info_job.py \
-  --job_name uiq-nonvee-info \
-  --aws_env dev \
-  --opco oh \
-  --work_bucket aep-datalake-work-dev \
-  --archive_bucket aep-datalake-raw-dev
+{
+"claudeCode.environmentVariables": [
+         {"name": "AWS_PROFILE", "value": "aedeon-bedrock"},
+         {"name": "AWS_REGION", "value": "us-west-2"},
+         {"name": "ANTHROPIC_MODEL", "value": "arn:aws:bedrock:us-west-2:110325908427:inference-profile/global.anthropic.claude-opus-4-6-v1"},
+         {"name": "CLAUDE_CODE_USE_BEDROCK", "value": "1"},
+         {"name": "ANTHROPIC_MODEL", "value": "global.anthropic.claude-opus-4-6-v1"}
+    ],
+    "claudeCode.preferredLocation": "panel",
+    "claudeCode.selectedModel": "global.anthropic.claude-opus-4-6-v1",}
 
 
 spark-submit --deploy-mode client --packages com.databricks:spark-xml_2.12:0.18.0 --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog --conf spark.sql.catalog.spark_catalog.type=glue --conf spark.sql.catalog.spark_catalog.glue.id=889415020100 --conf spark.sql.catalog.spark_catalog.warehouse=s3://aep-datalake-work-dev/test/warehouse --driver-cores 2 --driver-memory 10g --conf spark.driver.maxResultSize=5g --executor-cores 1 --executor-memory 5g /root/nonvee_uiq_info_job.py --job_name uiq-nonvee-info --aws_env dev --opco oh --work_bucket aep-datalake-work-dev --archive_bucket aep-datalake-raw-dev --batch_start_dttm_str "2024-12-01 00:00:00" --batch_end_dttm_str "2024-12-05 00:00:00"
