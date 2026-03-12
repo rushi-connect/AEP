@@ -41,16 +41,16 @@ import uuid
 import boto3
 import argparse
 
-from typing import Dict
+from typing import Dict, List
 from functools import reduce
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from pyspark.sql import SparkSession
-
 import pyspark.sql.functions as f
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType
 from pyspark.sql.window import Window
+from pyspark.sql.utils import AnalysisException
 
 parms_prefix = "aws_analytics_applications/aep_dl_util_ami_nonvee_info/parms"
 work_prefix = "raw"
@@ -140,6 +140,7 @@ OPCO_TO_CO_CD = {
     'swp': ['96']
 }
 
+
 def get_s3_file_contents(
     s3_bucket: str,
     s3_key: str,
@@ -148,6 +149,7 @@ def get_s3_file_contents(
     response = s3.get_object(Bucket=s3_bucket, Key=s3_key)
     contents = response["Body"].read().decode("utf-8")
     return contents
+
 
 def get_filtered_data_files_map(
     s3_bucket: str,
@@ -205,6 +207,60 @@ def get_filtered_data_files_map(
     print(f'completed filtering files in {str(timedelta(seconds=time.time() - _time))}')
 
     return filtered_files_map
+
+def delete_old_data(spark, table_name, opco, days=8):
+    try:
+        cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d_%H%M%S")
+        delete_query = f"""
+        DELETE FROM {table_name}
+        WHERE aep_opco = '{opco}' AND run_date < '{cutoff_date}'
+        """
+        print(f'===== Deleting old data (run_date < {cutoff_date}) =====')
+        spark.sql(delete_query)
+        print(f'===== DELETE completed =====')
+    except AnalysisException as e:
+        print(f"===== ERROR: Failed to delete data from {table_name}: {e} =====")
+
+def get_macs_ami_table(spark: SparkSession, opco: str) -> "DataFrame":
+    target_companies = OPCO_TO_CO_CD.get(opco, [])
+    print(f"===== Reading MACS table for opco={opco}, co_cd_ownr={target_companies} =====")
+    macs_df = (
+        spark.table("stg_nonvee.meter_premise_macs_ami")
+        .filter(f.col("co_cd_ownr").isin(target_companies))
+        .select(
+            f.col("prem_nb"),
+            f.col("bill_cnst"),
+            f.col("acct_clas_cd"),
+            f.col("acct_type_cd"),
+            f.col("devc_cd"),
+            f.col("pgm_id_nm"),
+            f.concat(
+                f.coalesce(f.col("tx_mand_data"), f.lit("")),
+                f.coalesce(f.col("doe_nb"), f.lit("")),
+                f.coalesce(f.col("serv_deliv_id"), f.lit(""))
+            ).alias("sd"),
+            f.col("mfr_devc_ser_nbr"),
+            f.col("mtr_pnt_nb"),
+            f.col("tarf_pnt_nb"),
+            f.lit(None).cast(StringType()).alias("cmsg_mtr_mult_nb"),
+            f.col("mtr_inst_ts"),
+            f.col("mtr_rmvl_ts"),
+            f.unix_timestamp("mtr_inst_ts", "yyyy-MM-dd HH:mm:ss").alias("unix_mtr_inst_ts"),
+            f.when(
+                f.col("mtr_rmvl_ts") == "9999-01-01",
+                f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd")
+            ).otherwise(
+                f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd HH:mm:ss")
+            ).alias("unix_mtr_rmvl_ts"),
+            f.unix_timestamp("acct_turn_on_dt", "yyyy-MM-dd").alias("unix_acct_turn_on_dt"),
+            f.unix_timestamp("acct_turn_off_dt", "yyyy-MM-dd").alias("unix_acct_turn_off_dt"),
+            f.col("serv_city_ad").alias("aep_city"),
+            f.col("serv_zip_ad").alias("aep_zip"),
+            f.col("state_cd").alias("aep_state")
+        )
+    )
+    print("===== MACS table read successfully =====")
+    return macs_df
 
 def main():
     print(f'===== starting job =====')
@@ -288,6 +344,25 @@ def main():
         data_file_min_size=data_file_min_size,
         data_file_ext=data_file_ext,
     )
+    
+    files_count = sum(len(f) for f in filtered_data_files_map.values())
+    if files_count == 0:
+        print(f'0 files selected. exiting ...')
+        spark.stop()
+        print(f'completed job in {str(timedelta(seconds=time.time() - _bgn_time))}')
+        exit(0)
+
+    #limit for testing
+    test_limit = 10
+    limited_files_map = {}
+    remaining = test_limit
+    for k, files in filtered_data_files_map.items():
+        if remaining <= 0:
+            break
+        limited_files_map[k] = files[:remaining]
+        remaining -= len(limited_files_map[k])
+    filtered_data_files_map = limited_files_map
+    print(f'===== TESTING: limited to {sum(len(f) for f in filtered_data_files_map.values())} files =====')
 
     _time = time.time()
     print(f'===== reading files =====')
@@ -334,23 +409,26 @@ def main():
     #Create UOM mapping DataFrame 
     uom_mapping_df = spark.createDataFrame(uom_data, uom_schema)
 
+    _time = time.time()
     print(f'===== Step 1: Rename columns =====')
-    #rename columns 
+    #rename columns
     interval_data_files_src_df = (
         staged_raw_df
-        .withColumnRenamed("_MeterName", "metername")              
-        .withColumnRenamed("_UtilDeviceID", "utildeviceid")       
-        .withColumnRenamed("_MacID", "macid")                     
-        .withColumnRenamed("IntervalReadData", "interval_reading") 
-        .withColumn("part_date", f.lit(part_date))                
+        .withColumnRenamed("_MeterName", "metername")
+        .withColumnRenamed("_UtilDeviceID", "utildeviceid")
+        .withColumnRenamed("_MacID", "macid")
+        .withColumnRenamed("IntervalReadData", "interval_reading")
+        .withColumn("part_date", f.lit(part_date))
     )
+    print(f'completed Step 1 in {str(timedelta(seconds=time.time() - _time))}')
 
     # Reference: stg_nonvee.interval_data_files_{opco}_src_vw
     # Source: scripts/ddl/stg_nonvee.interval_data_files_{opco}_src_vw.ddl
     # Called by: scripts/source_interval_data_files.sh
     
+    _time = time.time()
     print(f'===== Step 2: 1st EXPLODE (intervals) =====')
-    
+
     #1st EXPLODE: Flatten interval_reading array
     interval_exploded_df = (
         interval_data_files_src_df
@@ -379,8 +457,10 @@ def main():
             ).cast("int") >= 20150301
         )
     )
+    print(f'completed Step 2 in {str(timedelta(seconds=time.time() - _time))}')
 
     # Step 3: 2nd EXPLODE - Flatten int_reading + time calculations (notebook cell 13)
+    _time = time.time()
     print(f'===== Step 3: 2nd EXPLODE (readings) =====')
     reading_exploded_df = (
         interval_exploded_df
@@ -421,7 +501,10 @@ def main():
         )
     )
 
-    # LEFT JOIN with uom_mapping 
+    print(f'completed Step 3 in {str(timedelta(seconds=time.time() - _time))}')
+
+    # LEFT JOIN with uom_mapping
+    _time = time.time()
     print(f'===== Step 4: LEFT JOIN with UOM mapping =====')
     interval_data_files_src_vw_df = (reading_exploded_df
         .join(uom_mapping_df, reading_exploded_df.channel == uom_mapping_df.aep_channel_id, "left")
@@ -465,47 +548,17 @@ def main():
     # 4. Rename/transform columns to match DDL (41 columns)
     # 5. Load MACS reference table
 
-    print(f'===== Step 5: Load MACS reference =====')
-    target_companies = OPCO_TO_CO_CD.get(opco, [])
+    print(f'completed Step 4 in {str(timedelta(seconds=time.time() - _time))}')
 
-    macs_df = (
-        spark.table("stg_nonvee.meter_premise_macs_ami")
-        .filter(f.col("co_cd_ownr").isin(target_companies))
-        .select(
-            f.col("prem_nb"),
-            f.col("bill_cnst"),
-            f.col("acct_clas_cd"),
-            f.col("acct_type_cd"),
-            f.col("devc_cd"),
-            f.col("pgm_id_nm"),
-            f.concat(
-                f.coalesce(f.col("tx_mand_data"), f.lit("")),
-                f.coalesce(f.col("doe_nb"), f.lit("")),
-                f.coalesce(f.col("serv_deliv_id"), f.lit(""))
-            ).alias("sd"),
-            f.col("mfr_devc_ser_nbr"),
-            f.col("mtr_pnt_nb"),
-            f.col("tarf_pnt_nb"),
-            f.lit(None).cast(StringType()).alias("cmsg_mtr_mult_nb"),
-            f.col("mtr_inst_ts"),
-            f.col("mtr_rmvl_ts"),
-            f.unix_timestamp("mtr_inst_ts", "yyyy-MM-dd HH:mm:ss").alias("unix_mtr_inst_ts"),
-            f.when(
-                f.col("mtr_rmvl_ts") == "9999-01-01",
-                f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd")
-            ).otherwise(
-                f.unix_timestamp("mtr_rmvl_ts", "yyyy-MM-dd HH:mm:ss")
-            ).alias("unix_mtr_rmvl_ts"),
-            f.unix_timestamp("acct_turn_on_dt", "yyyy-MM-dd").alias("unix_acct_turn_on_dt"),
-            f.unix_timestamp("acct_turn_off_dt", "yyyy-MM-dd").alias("unix_acct_turn_off_dt"),
-            f.col("serv_city_ad").alias("aep_city"),
-            f.col("serv_zip_ad").alias("aep_zip"),
-            f.col("state_cd").alias("aep_state")
-        )
-    )
+    _time = time.time()
+    print(f'===== Step 5: Load MACS reference =====')
+    macs_df = get_macs_ami_table(spark, opco)
+    print(f'completed Step 5 in {str(timedelta(seconds=time.time() - _time))}')
 
     # Step 6: LEFT JOIN with MACS
+    _time = time.time()
     print(f'===== Step 6: LEFT JOIN with MACS =====')
+
     interval_data_files_stg_df = (
         interval_data_files_src_vw_df
         .withColumn("unix_endtime", f.unix_timestamp("endtime", "yyyy-MM-dd'T'HH:mm:ssXXX"))
@@ -576,7 +629,10 @@ def main():
     # - Derive authority and aep_usage_dt from existing columns
     # - Add audit timestamps (hdp_insert_dttm, hdp_update_dttm)
 
+    print(f'completed Step 6 in {str(timedelta(seconds=time.time() - _time))}')
+
     # Step 7: STG_VW transformations
+    _time = time.time()
     print(f'===== Step 7: STG_VW transformations =====')
     interval_data_files_stg_vw_df = (
         interval_data_files_stg_df
@@ -627,8 +683,8 @@ def main():
             f.col("aep_city"),
             f.col("aep_zip"),
             f.col("aep_state"),
-            f.from_unixtime(f.unix_timestamp(f.current_timestamp())).alias("hdp_insert_dttm"),
-            f.from_unixtime(f.unix_timestamp(f.current_timestamp())).alias("hdp_update_dttm"),
+            f.current_timestamp().alias("hdp_insert_dttm"),
+            f.current_timestamp().alias("hdp_update_dttm"),
             f.col("hdp_update_user"),
             f.substring(f.col("aep_premise_nb"), 1, 2).alias("authority"),
             f.substring(f.col("starttime"), 1, 10).alias("aep_usage_dt"),
@@ -648,10 +704,12 @@ def main():
     # Prepare data for Iceberg xfrm table by:
     # - Combined both queries like (stg_nonvee.interval_data_files_{opco}_xfrm.ddl+interval_data_files_{opco}_xfrm_vw.ddl)
     # - Adding 5 NULL columns (toutier, toutiername, aep_billable_ind, aep_data_quality_cd, aep_data_validation)
-    # - Casting to match DDL types (double, float, timestamp)
     # - Deduplication using ROW_NUMBER() partitioned by (serialnumber, endtimeperiod, aep_channel_id, aep_raw_uom)
 
+    print(f'completed Step 7 in {str(timedelta(seconds=time.time() - _time))}')
+
     # Step 8: Deduplication + XFRM transformations
+    _time = time.time()
     print(f'===== Step 8: Deduplication =====')
     
     dedup_window = Window.partitionBy(
@@ -718,23 +776,31 @@ def main():
         .drop("row_num")
     )
 
-    # Step 9: Checkpoint + MERGE into Iceberg
-    print(f'===== Step 9: Checkpoint + MERGE =====')
-    
-    # Set checkpoint directory
-    spark.sparkContext.setCheckpointDir(f"s3://{work_bucket}/temp/checkpoint/")
-    
-    # Materialize the DataFrame (saves dedup result to disk)
-    materialized_df = interval_data_files_xfrm_df.checkpoint()
-    
-    # Create temp view from materialized data
-    materialized_df.createOrReplaceTempView("interval_data_files_xfrm_vw")
-    
+    print(f'completed Step 8 in {str(timedelta(seconds=time.time() - _time))}')
+
+    # Step 9: Stage deduped data as parquet + MERGE into Iceberg
+    print(f'===== Step 9: Staging deduped xfrm data as parquet =====')
+    _time = time.time()
+    deduped_xfrm_staging_path = f'{scratch_path}/dedup_xfrm_stage/'
+    interval_data_files_xfrm_df.repartition("aep_usage_dt").sortWithinPartitions([
+        "aep_meter_bucket",
+        "serialnumber",
+        "aep_raw_uom",
+        "endtimeperiod",
+    ]).write.mode(
+        "overwrite"
+    ).partitionBy("aep_usage_dt").parquet(deduped_xfrm_staging_path)
+    print(f'completed staging in {str(timedelta(seconds=time.time() - _time))}')
+
+    staged_xfrm_df = spark.read.parquet(deduped_xfrm_staging_path)
+    staged_xfrm_df_count = staged_xfrm_df.count()
+    staged_xfrm_df_partition_count = staged_xfrm_df.rdd.getNumPartitions()
+    print(f'staged {staged_xfrm_df_count} deduped record(s) in {staged_xfrm_df_partition_count} partition(s)')
+    staged_xfrm_df.createOrReplaceTempView("interval_data_files_xfrm_vw")
+
     # Get distinct usage dates for partition pruning
-    usage_dates_df = materialized_df.select("aep_usage_dt").distinct()
-    usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
+    usage_dates_list = [r.aep_usage_dt for r in staged_xfrm_df.select("aep_usage_dt").distinct().collect()]
     usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
-    
     print(f'===== Usage dates: {usage_dates_str} =====')
     
     # MERGE SQL
@@ -823,19 +889,12 @@ def main():
 
     # Step 10: DELETE old + INSERT new into downstream incremental table
     print(f'===== Step 10: DELETE old + INSERT into downstream table =====')
-    
-    # Calculate cutoff date (8 days ago)
-    cutoff_date = (datetime.now() - timedelta(days=8)).strftime("%Y%m%d_%H%M%S")
+
+    target_incr_table = "iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr"
     current_run_date = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     # Step 10a: DELETE old data (older than 8 days)
-    delete_sql = f"""
-    DELETE FROM iceberg_catalog.xfrm_interval.reading_ivl_nonvee_incr
-    WHERE aep_opco = '{opco}' AND run_date < '{cutoff_date}'
-    """
-    print(f'===== Deleting old data (run_date < {cutoff_date}) =====')
-    spark.sql(delete_sql)
-    print(f'===== DELETE completed =====')
+    delete_old_data(spark, target_incr_table, opco)
     
     # Step 10b: INSERT new data
     insert_downstream_sql = f"""
@@ -896,32 +955,17 @@ def main():
     spark.sql(insert_downstream_sql)
     print(f'===== INSERT downstream completed =====')
 
-    # # update last_process_dttm_file
-    # # Step 11: Update last_process_dttm file
-    # print(f'===== Step 11: Update last_process_dttm =====')
-    # s3 = boto3.client("s3")
-    # last_process_dttm_file = f'info_last_proc_dt_do_not_remove_{opco}.txt'
-    # last_process_dttm_key = f'{parms_prefix}/{last_process_dttm_file}'
-    # new_last_process_dttm = batch_end_dttm_ltz.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # s3.put_object(
-    #     Bucket=work_bucket,
-    #     Key=last_process_dttm_key,
-    #     Body=new_last_process_dttm.encode("utf-8")
-    # )
-    # print(f'===== Updated {last_process_dttm_key} to {new_last_process_dttm} =====')
-
     if not skip_archive == "true":
         # archive raw xml files
         pass
 
-    # delete scratch directory
+    # delete scratch directory (includes raw_staging + dedup_xfrm_stage)
     hadoop_conf = spark._jsc.hadoopConfiguration()
     fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
-    path = spark._jvm.org.apache.hadoop.fs.Path(raw_staging_path)
-    if fs.exists(path):
-        print(f"Deleting HDFS path: {path}")
-        fs.delete(path, True)
+    scratch_hdfs_path = spark._jvm.org.apache.hadoop.fs.Path(scratch_path)
+    if fs.exists(scratch_hdfs_path):
+        print(f"Deleting HDFS scratch path: {scratch_hdfs_path}")
+        fs.delete(scratch_hdfs_path, True)
 
     spark.stop()
     print(f'completed job in {str(timedelta(seconds=time.time() - _bgn_time))}')
