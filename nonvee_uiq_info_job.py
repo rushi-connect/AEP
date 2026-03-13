@@ -108,27 +108,21 @@ info_xml_schema = StructType([
 # Source: scripts/ddl/stg_nonvee.interval_data_files_{opco}_src_vw.ddl
 # Called by: scripts/source_interval_data_files.sh
 # UOM Mapping Reference Table
-uom_data = [
-    ("1", "KWH", "kwh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("2", "KW", "kw", "kW_del_mtr_ivl_len_min", "DEMAND", "N"),
-    ("3", "KVARH", "kvarh", "kVArh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("4", "KVAR", "kvar", "kVAr_del_mtr_ivl_len_min", "DEMAND", "N"),
-    ("5", "KVAH", "kvah", "kVAh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("100", "KWH", "wh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "Y"),
-    ("101", "KWH", "kwh", "kWh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("102", "KWH", "kwh(rec)", "kWh_rec_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("108", "KVARH", "kvarh", "kVArh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-    ("109", "KVAH", "kvah", "kVAh_del_mtr_ivl_len_min", "INTERVAL", "N"),
-]
-
-uom_schema = StructType([
-    StructField("aep_channel_id", StringType()),
-    StructField("aep_derived_uom", StringType()),
-    StructField("aep_raw_uom", StringType()),
-    StructField("name_register", StringType()),
-    StructField("aep_srvc_qlty_idntfr", StringType()),
-    StructField("value_mltplr_flg", StringType()),
-])
+def get_uom_mapping_table(spark: SparkSession, opco: str, table_name: str = "usage_nonvee.uom_mapping") -> "DataFrame":
+    """Reads UOM mapping from Glue catalog table, filtered by opco."""
+    print(f"===== Reading UOM mapping table: {table_name} for opco={opco} =====")
+    uom_mapping_df = spark.table(table_name).filter(
+        f.col("aep_opco") == opco
+    ).select(
+        f.col("aep_channel_id"),
+        f.col("aep_derived_uom"),
+        f.lower(f.trim(f.col("aep_raw_uom"))).alias("aep_raw_uom"),
+        f.col("name_register"),
+        f.col("aep_srvc_qlty_idntfr"),
+        f.col("value_mltplr_flg"),
+    )
+    print("===== UOM mapping table read successfully =====")
+    return uom_mapping_df
 
 # OPCO to Company Code mapping (for MACS filter)
 OPCO_TO_CO_CD = {
@@ -352,18 +346,6 @@ def main():
         print(f'completed job in {str(timedelta(seconds=time.time() - _bgn_time))}')
         exit(0)
 
-    #limit for testing
-    test_limit = 10
-    limited_files_map = {}
-    remaining = test_limit
-    for k, files in filtered_data_files_map.items():
-        if remaining <= 0:
-            break
-        limited_files_map[k] = files[:remaining]
-        remaining -= len(limited_files_map[k])
-    filtered_data_files_map = limited_files_map
-    print(f'===== TESTING: limited to {sum(len(f) for f in filtered_data_files_map.values())} files =====')
-
     _time = time.time()
     print(f'===== reading files =====')
     files_count = 0
@@ -406,8 +388,8 @@ def main():
 
     part_date = batch_end_dttm_ltz.strftime("%Y%m%d_%H%M")
 
-    #Create UOM mapping DataFrame 
-    uom_mapping_df = spark.createDataFrame(uom_data, uom_schema)
+    # Read UOM mapping from Glue catalog table
+    uom_mapping_df = get_uom_mapping_table(spark, opco)
 
     _time = time.time()
     print(f'===== Step 1: Rename columns =====')
@@ -432,10 +414,8 @@ def main():
     #1st EXPLODE: Flatten interval_reading array
     interval_exploded_df = (
         interval_data_files_src_df
-        .withColumn("filename", f.input_file_name())
         .withColumn("exp_interval", f.explode("interval_reading.Interval"))
         .select(
-            f.col("filename"),
             f.col("metername").alias("MeterName"),
             f.col("utildeviceid").alias("UtilDeviceID"),
             f.col("macid").alias("MacID"),
@@ -466,7 +446,6 @@ def main():
         interval_exploded_df
         .withColumn("exp_reading", f.explode("int_reading"))
         .select(
-            f.col("filename"),
             f.col("MeterName"),
             f.col("UtilDeviceID"),
             f.col("MacID"),
@@ -509,7 +488,6 @@ def main():
     interval_data_files_src_vw_df = (reading_exploded_df
         .join(uom_mapping_df, reading_exploded_df.channel == uom_mapping_df.aep_channel_id, "left")
         .select(
-            f.col("filename"),
             f.trim(f.col("MeterName")).alias("MeterName"),
             f.col("UtilDeviceID"),
             f.col("MacID"),
@@ -570,7 +548,6 @@ def main():
             "left"
         )
         .select(
-            f.col("filename"),
             f.lit(opco).alias("aep_opco"),
             f.col("MeterName").alias("serialnumber"),
             f.col("UtilDeviceID").alias("utildeviceid"),
