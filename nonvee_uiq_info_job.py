@@ -759,7 +759,7 @@ def main():
     print(f'===== Step 9: Staging deduped xfrm data as parquet =====')
     _time = time.time()
     deduped_xfrm_staging_path = f'{scratch_path}/dedup_xfrm_stage/'
-    interval_data_files_xfrm_df.repartition("aep_usage_dt").sortWithinPartitions([
+    interval_data_files_xfrm_df.repartition(200, "aep_usage_dt").sortWithinPartitions([
         "aep_meter_bucket",
         "serialnumber",
         "aep_raw_uom",
@@ -945,6 +945,7 @@ def main():
         fs.delete(scratch_hdfs_path, True)
 
     spark.stop()
+    print(f'===== Total files processed: {files_count} =====')
     print(f'completed job in {str(timedelta(seconds=time.time() - _bgn_time))}')
 
 
