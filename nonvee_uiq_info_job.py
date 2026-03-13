@@ -757,30 +757,48 @@ def main():
 
     # Step 9: Stage deduped data as parquet + MERGE into Iceberg
     print(f'===== Step 9: Staging deduped xfrm data as parquet =====')
-    _time = time.time()
-    deduped_xfrm_staging_path = f'{scratch_path}/dedup_xfrm_stage/'
-    interval_data_files_xfrm_df.repartition(200, "aep_usage_dt").sortWithinPartitions([
-        "aep_meter_bucket",
-        "serialnumber",
-        "aep_raw_uom",
-        "endtimeperiod",
-    ]).write.mode(
-        "overwrite"
-    ).partitionBy("aep_usage_dt").parquet(deduped_xfrm_staging_path)
-    print(f'completed staging in {str(timedelta(seconds=time.time() - _time))}')
-
-    staged_xfrm_df = spark.read.parquet(deduped_xfrm_staging_path)
-    staged_xfrm_df_count = staged_xfrm_df.count()
-    staged_xfrm_df_partition_count = staged_xfrm_df.rdd.getNumPartitions()
-    print(f'staged {staged_xfrm_df_count} deduped record(s) in {staged_xfrm_df_partition_count} partition(s)')
-    staged_xfrm_df.createOrReplaceTempView("interval_data_files_xfrm_vw")
-
+    #_time = time.time()
+    #deduped_xfrm_staging_path = f'{scratch_path}/dedup_xfrm_stage/'
+    #interval_data_files_xfrm_df.repartition(200, "aep_usage_dt").sortWithinPartitions([
+    #    "aep_meter_bucket",
+    #    "serialnumber",
+    #    "aep_raw_uom",
+    #    "endtimeperiod",
+    #]).write.mode(
+    #    "overwrite"
+    #).partitionBy("aep_usage_dt").parquet(deduped_xfrm_staging_path)
+    #print(f'completed staging in {str(timedelta(seconds=time.time() - _time))}')
+#
+    #staged_xfrm_df = spark.read.parquet(deduped_xfrm_staging_path)
+    #staged_xfrm_df_count = staged_xfrm_df.count()
+    #staged_xfrm_df_partition_count = staged_xfrm_df.rdd.getNumPartitions()
+    #print(f'staged {staged_xfrm_df_count} deduped record(s) in {staged_xfrm_df_partition_count} partition(s)')
+    #staged_xfrm_df.createOrReplaceTempView("interval_data_files_xfrm_vw")
+#
+    ## Get distinct usage dates for partition pruning
+    #usage_dates_list = [r.aep_usage_dt for r in staged_xfrm_df.select("aep_usage_dt").distinct().collect()]
+    #usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])    
+    
+    # Set checkpoint directory
+    spark.sparkContext.setCheckpointDir(f"s3://{work_bucket}/temp/checkpoint/")
+    
+    # Materialize the DataFrame (saves dedup result to disk)
+    materialized_df = interval_data_files_xfrm_df.checkpoint()
+    
+    # Create temp view from materialized data
+    materialized_df.createOrReplaceTempView("interval_data_files_xfrm_vw")
+    
     # Get distinct usage dates for partition pruning
-    usage_dates_list = [r.aep_usage_dt for r in staged_xfrm_df.select("aep_usage_dt").distinct().collect()]
+    usage_dates_df = materialized_df.select("aep_usage_dt").distinct()
+    usage_dates_list = [row.aep_usage_dt for row in usage_dates_df.collect()]
     usage_dates_str = ",".join([f"'{d}'" for d in usage_dates_list])
+    
     print(f'===== Usage dates: {usage_dates_str} =====')
     
-    # MERGE SQL
+    # Step 9: Checkpoint + MERGE into Iceberg
+    print(f'===== Step 9: Checkpoint + MERGE =====')
+
+    ## MERGE SQL
     merge_sql = f"""
     MERGE INTO iceberg_catalog.usage_nonvee.reading_ivl_nonvee_{opco} AS t
     USING (
